@@ -1,313 +1,245 @@
 <?php
+
 namespace com\zoho\api\authenticator\store;
 
-use com\zoho\api\authenticator\OAuthToken;
-
 use com\zoho\crm\api\exception\SDKException;
-
+use com\zoho\crm\api\UserSignature;
 use com\zoho\crm\api\util\Constants;
-
 use com\zoho\api\authenticator\OAuthBuilder;
+use com\zoho\api\authenticator\OAuthToken;
+use DateTimeImmutable;
+use Exception;
 
 /**
  * This class stores the user token details to the file.
  */
 class FileStore implements TokenStore
 {
-    private $filePath = null;
-
-    private $headers = array(Constants::ID, Constants::USER_MAIL, Constants::CLIENT_ID, Constants::CLIENT_SECRET, Constants::REFRESH_TOKEN, Constants::ACCESS_TOKEN, Constants::GRANT_TOKEN, Constants::EXPIRY_TIME, Constants::REDIRECT_URL);
+    private $filePath;
+    private $columnMap = [
+        Constants::ID => 0,
+        Constants::USER_MAIL => 1,
+        Constants::CLIENT_ID => 2,
+        Constants::CLIENT_SECRET => 3,
+        Constants::REFRESH_TOKEN => 4,
+        Constants::ACCESS_TOKEN => 5,
+        Constants::GRANT_TOKEN => 6,
+        Constants::EXPIRY_TIME => 7,
+        Constants::REDIRECT_URL => 8,
+    ];
 
     /**
      * Creates an FileStore class instance with the specified parameters.
      * @param string $filePath A string containing the absolute file path to store tokens.
      */
-    public function __construct($filePath)
+    public function __construct(string $filePath)
     {
         $this->filePath = trim($filePath);
 
-        $csvWriter = fopen($this->filePath, 'a');//opens file in append mode
+        $csvWriter = fopen($this->filePath, 'a'); //opens file in append mode
 
-        if (trim(file_get_contents($this->filePath)) == false)
-        {
-            fwrite($csvWriter, implode(",", $this->headers));
+        if (!trim(file_get_contents($this->filePath))) {
+            fwrite($csvWriter, implode(",", $this->columnsToHeaders()));
         }
 
         fclose($csvWriter);
     }
 
-    public function getToken($user, $token)
+    private function columnsToHeaders(): array
     {
-        $csvReader = null;
+        $headers = array_flip($this->columnMap);
+        ksort($headers);
 
-        try
-        {
-            $csvReader = file($this->filePath, FILE_IGNORE_NEW_LINES);
-
-            if($token instanceof OAuthToken)
-            {
-                for($index = 1; $index < sizeof($csvReader); $index++)
-                {
-                    $allContents = $csvReader[$index];
-
-                    $nextRecord = str_getcsv($allContents);
-
-                    if($this->checkTokenExists($user->getEmail(), $token, $nextRecord))
-                    {
-                        $token->setAccessToken($nextRecord[5]);
-
-                        $token->setExpiresIn($nextRecord[7]);
-
-                        $token->setRefreshToken($nextRecord[4]);
-
-                        $token->setId($nextRecord[0]);
-
-                        $token->setUserMail($nextRecord[1]);
-
-                        return $token;
-                    }
-                }
-            }
-        }
-        catch (\Exception $ex)
-        {
-            throw new SDKException(Constants::TOKEN_STORE, Constants::GET_TOKEN_FILE_ERROR, null, $ex);
-        }
-
-        return null;
+        return $headers;
     }
 
-    public function saveToken($user, $token)
+    private function getColumnData(array $row, string $columnName)
     {
-        $csvWriter = null;
+        $columnIndex = $this->columnMap[$columnName];
 
-        try
-        {
-            if($token instanceof OAuthToken)
-            {
-                $token->setUserMail($user->getEmail());
+        return $row[$columnIndex] ?? null;
+    }
 
-                $this->deleteToken($token);
+    public function getToken(UserSignature $user, OAuthToken $token): ?OAuthToken
+    {
+        try {
+            $csvReader = file($this->filePath, FILE_IGNORE_NEW_LINES);
 
-                $data = array(
-                    $token->getId(),
-                    $user->getEmail(),
-                    $token->getClientId(),
-                    $token->getClientSecret(),
-                    $token->getRefreshToken(),
-                    $token->getAccessToken(),
-                    $token->getGrantToken(),
-                    $token->getExpiresIn(),
-                    $token->getRedirectURL()
-                );
+            for ($index = 1; $index < sizeof($csvReader); $index++) {
+                $allContents = $csvReader[$index];
+                $nextRecord = str_getcsv($allContents);
+                if ($this->checkTokenExists($user->getEmail(), $token, $nextRecord)) {
+                    $token->setAccessToken($this->getColumnData($nextRecord, Constants::ACCESS_TOKEN));
+                    $token->setExpiryTime(new DateTimeImmutable($this->getColumnData($nextRecord, Constants::EXPIRY_TIME)));
+                    $token->setRefreshToken($this->getColumnData($nextRecord, Constants::REFRESH_TOKEN));
+                    $token->setId($this->getColumnData($nextRecord, Constants::ID));
+                    $token->setUserMail($this->getColumnData($nextRecord, Constants::USER_MAIL));
+
+                    return $token;
+                }
             }
 
-            $csvWriter = file($this->filePath);
-
-            array_push($csvWriter, "\n");
-
-            array_push($csvWriter, implode(",", $data));
-
-            file_put_contents($this->filePath, $csvWriter);
+            return null;
+        } catch (Exception $ex) {
+            throw new SDKException(Constants::TOKEN_STORE, Constants::GET_TOKEN_FILE_ERROR, null, $ex);
         }
-        catch (\Exception $ex)
-        {
+    }
+
+    public function saveToken(UserSignature $user, OAuthToken $token): void
+    {
+        try {
+            $token->setUserMail($user->getEmail());
+            $this->deleteToken($token);
+
+            $data = [];
+            $this->setColumnData($data, Constants::ID, $token->getId());
+            $this->setColumnData($data, Constants::USER_MAIL, $user->getEmail());
+            $this->setColumnData($data, Constants::CLIENT_ID, $token->getClientId());
+            $this->setColumnData($data, Constants::CLIENT_SECRET, $token->getClientSecret());
+            $this->setColumnData($data, Constants::REFRESH_TOKEN, $token->getRefreshToken());
+            $this->setColumnData($data, Constants::ACCESS_TOKEN, $token->getAccessToken());
+            $this->setColumnData($data, Constants::GRANT_TOKEN, $token->getGrantToken());
+            $this->setColumnData($data, Constants::EXPIRY_TIME, $token->getExpiryTime());
+            $this->setColumnData($data, Constants::REDIRECT_URL, $token->getRedirectURL());
+
+            $csvWriter = file($this->filePath);
+            $csvWriter[] = "\n";
+            $csvWriter[] = implode(",", $data);
+            file_put_contents($this->filePath, $csvWriter);
+        } catch (Exception $ex) {
             throw new SDKException(Constants::TOKEN_STORE, Constants::SAVE_TOKEN_FILE_ERROR, null, $ex);
         }
     }
 
-    public function deleteToken($token)
+    private function setColumnData(array &$data, string $columnName, $value): void
     {
-        $csvReader = null;
+        $columnIndex = $this->columnMap[$columnName];
 
-        try
-        {
+        $data[$columnIndex] = $value;
+    }
+
+    public function deleteToken(OAuthToken $token): void
+    {
+        try {
             $csvReader = file($this->filePath, FILE_IGNORE_NEW_LINES);
 
-            $deleted = false;
-
-            if( $token instanceof OAuthToken)
-            {
-                for ($index = 1; $index < sizeof($csvReader); $index++)
-                {
-                    $allContents = $csvReader[$index];
-
-                    $nextRecord = str_getcsv($allContents);
-
-                    if ($this->checkTokenExists($token->getUserMail(), $token, $nextRecord))
-                    {
-                        unset($csvReader[$index]);
-
-                        $deleted = true;
-
-                        break; // Stop searching after we found the email
-                    }
-                }
-
-                // Rewrite the file if we deleted the user account details.
-                if ($deleted)
-                {
+            for ($index = 1; $index < sizeof($csvReader); $index++) {
+                $allContents = $csvReader[$index];
+                $nextRecord = str_getcsv($allContents);
+                if ($this->checkTokenExists($token->getUserMail(), $token, $nextRecord)) {
+                    unset($csvReader[$index]);
+                    // Rewrite the file after we deleted the user account details.
                     file_put_contents($this->filePath, implode("\n", $csvReader));
+
+                    return; // Stop searching after we found the email
                 }
             }
-        }
-        catch(SDKException $ex)
-        {
+        } catch (SDKException $ex) {
             throw $ex;
-        }
-        catch (\Exception $ex)
-        {
+        } catch (Exception $ex) {
             throw new SDKException(Constants::TOKEN_STORE, Constants::DELETE_TOKEN_FILE_ERROR, null, $ex);
         }
     }
 
-    public function getTokens()
+    public function getTokens(): array
     {
-        $csvReader = null;
-
-        $tokens = array();
-
-        try
-        {
+        try {
             $csvReader = file($this->filePath, FILE_IGNORE_NEW_LINES);
-
-            for ($index = 1; $index < sizeof($csvReader); $index++)
-            {
+            $tokens = [];
+            for ($index = 1; $index < sizeof($csvReader); $index++) {
                 $allContents = $csvReader[$index];
-
                 $nextRecord = str_getcsv($allContents);
+                $grantToken = $this->getColumnData($nextRecord, Constants::GRANT_TOKEN) ?: null;
 
-                $grantToken = ($nextRecord[6] != null && strlen($nextRecord[6]) > 0) ? $nextRecord[6] : null;
+                $token = (new OAuthBuilder)
+                    ->clientId($this->getColumnData($nextRecord, Constants::CLIENT_ID))
+                    ->clientSecret($this->getColumnData($nextRecord, Constants::CLIENT_SECRET))
+                    ->refreshToken($this->getColumnData($nextRecord, Constants::REFRESH_TOKEN))
+                    ->build();
+                $token->setId($this->getColumnData($nextRecord, Constants::ID));
 
-                $token = (new OAuthBuilder())->clientId($nextRecord[2])->clientSecret($nextRecord[3])->refreshToken($nextRecord[4])->build();
-
-                $token->setId($nextRecord[0]);
-
-                if($grantToken != null)
-                {
+                if ($grantToken != null) {
                     $token->setGrantToken($grantToken);
                 }
 
-                $token->setUserMail(strval($nextRecord[1]));
-
-                $token->setAccessToken($nextRecord[5]);
-
-                $token->setExpiresIn($nextRecord[7]);
-
-                $token->setRedirectURL($nextRecord[8]);
+                $token->setUserMail(strval($this->getColumnData($nextRecord, Constants::USER_MAIL)));
+                $token->setAccessToken($this->getColumnData($nextRecord, Constants::ACCESS_TOKEN));
+                $token->setExpiryTime(new DateTimeImmutable($this->getColumnData($nextRecord, Constants::EXPIRY_TIME)));
+                $token->setRedirectURL($this->getColumnData($nextRecord, Constants::REDIRECT_URL));
 
                 $tokens[] = $token;
             }
-        }
-        catch (\Exception $ex)
-        {
+
+            return $tokens;
+        } catch (Exception $ex) {
             throw new SDKException(Constants::TOKEN_STORE, Constants::GET_TOKENS_FILE_ERROR, null, $ex);
         }
-
-        return $tokens;
     }
 
     public function deleteTokens()
     {
-        try
-        {
-            file_put_contents($this->filePath, implode(",", $this->headers));
-        }
-        catch(\Exception $ex)
-        {
+        try {
+            file_put_contents($this->filePath, implode(",", $this->columnsToHeaders()));
+        } catch (Exception $ex) {
             throw new SDKException(Constants::TOKEN_STORE, Constants::DELETE_TOKENS_FILE_ERROR, null, $ex);
         }
     }
 
-    private function checkTokenExists($email, $oauthToken, $row)
+    /**
+     * Provides whether token exists.
+     * @throws SDKException
+     */
+    private function checkTokenExists($email, OAuthToken $oauthToken, array $row): bool
     {
-        if ($email === null)
-        {
+        if ($email === null) {
             throw new SDKException(Constants::USER_MAIL_NULL_ERROR, Constants::USER_MAIL_NULL_ERROR_MESSAGE);
         }
 
-        $clientId = (string)$oauthToken->getClientId();
-
+        $clientId = $oauthToken->getClientId();
         $grantToken = (string)$oauthToken->getGrantToken();
-
         $refreshToken = (string)$oauthToken->getRefreshToken();
+        $tokenCheck = $grantToken != null
+            ? $grantToken === (string)$this->getColumnData($row, Constants::GRANT_TOKEN)
+            : $refreshToken === (string)$this->getColumnData($row, Constants::REFRESH_TOKEN);
 
-        $tokenCheck = $grantToken != null ? $grantToken === (string)$row[6] : $refreshToken === (string)$row[4];
+        $isMatch = $email === $this->getColumnData($row, Constants::USER_MAIL);
+        $isMatch &= $clientId === $this->getColumnData($row, Constants::CLIENT_ID);
+        $isMatch &= $tokenCheck;
 
-        if($email === $row[1] && $clientId === $row[2] && $tokenCheck )
-        {
-            return true;
-        }
-
-        return false;
+        return $isMatch;
     }
 
-    public function getTokenById($id, $token)
+    public function getTokenById(string $id, OAuthToken $token): OAuthToken
     {
-        $csvReader = null;
-
-        try
-        {
+        try {
             $csvReader = file($this->filePath, FILE_IGNORE_NEW_LINES);
-
-            if ($token instanceof OAuthToken)
-            {
-                $isRowPresent = false;
-
-                for ($index = 1; $index < sizeof($csvReader); $index++)
-                {
-                    $allContents = $csvReader[$index];
-
-                    $nextRecord = str_getcsv($allContents);
-
-                    if ($nextRecord[0] == $id)
-					{
-                        $isRowPresent = true;
-
-                        $grantToken = ($nextRecord[6] != null && strlen($nextRecord[6]) > 0)? $nextRecord[6] : null;
-
-						$redirectURL = ($nextRecord[8] != null && strlen($nextRecord[8]) > 0)? $nextRecord[8] : null;
-
-                        $token->setClientId($nextRecord[2]);
-
-                        $token->setClientSecret($nextRecord[3]);
-
-						$token->setRefreshToken($nextRecord[4]);
-
-                        $token->setId($id);
-
-                        if($grantToken != null)
-                        {
-                            $token->setGrantToken($grantToken);
-                        }
-
-                        $token->setUserMail($nextRecord[1]);
-
-                        $token->setAccessToken($nextRecord[5]);
-
-                        $token->setExpiresIn($nextRecord[7]);
-
-                        $token->setRedirectURL($redirectURL);
-
-                        return $token;
+            for ($index = 1; $index < sizeof($csvReader); $index++) {
+                $allContents = $csvReader[$index];
+                $nextRecord = str_getcsv($allContents);
+                if ($this->getColumnData($nextRecord, Constants::ID) == $id) {
+                    $token->setId($id);
+                    $token->setUserMail($this->getColumnData($nextRecord, Constants::USER_MAIL));
+                    $token->setClientId($this->getColumnData($nextRecord, Constants::CLIENT_ID));
+                    $token->setClientSecret($this->getColumnData($nextRecord, Constants::CLIENT_SECRET));
+                    $token->setRefreshToken($this->getColumnData($nextRecord, Constants::REFRESH_TOKEN));
+                    $token->setAccessToken($this->getColumnData($nextRecord, Constants::ACCESS_TOKEN));
+                    if (0 < strlen($grantToken = $this->getColumnData($nextRecord, Constants::GRANT_TOKEN))) {
+                        $token->setGrantToken($grantToken);
                     }
-                }
+                    $token->setExpiryTime(new DateTimeImmutable($this->getColumnData($nextRecord, Constants::EXPIRY_TIME)));
+                    if (0 < strlen($redirectURL = $this->getColumnData($nextRecord, Constants::REDIRECT_URL))) {
+                        $token->setRedirectURL($redirectURL);
+                    }
 
-                if(!$isRowPresent)
-				{
-					throw new SDKException(Constants::TOKEN_STORE, Constants::GET_TOKEN_BY_ID_FILE_ERROR);
-				}
+                    return $token;
+                }
             }
-        }
-        catch (SDKException $ex)
-        {
+
+            throw new SDKException(Constants::TOKEN_STORE, Constants::GET_TOKEN_BY_ID_FILE_ERROR);
+        } catch (SDKException $ex) {
             throw $ex;
-        }
-        catch (\Exception $ex)
-        {
+        } catch (Exception $ex) {
             throw new SDKException(Constants::TOKEN_STORE, Constants::GET_TOKEN_FILE_ERROR, null, $ex);
         }
-
-        return null;
     }
 }

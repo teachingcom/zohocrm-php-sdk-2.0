@@ -1,76 +1,49 @@
 <?php
-namespace com\zoho\crm\api\dc;
 
-use com\zoho\crm\api\dc\DataCenter;
+namespace com\zoho\crm\api\dc;
 
 /**
  * This class represents the properties of Zoho CRM in Japan Domain.
  */
 class JPDataCenter extends DataCenter
 {
-    private static $PRODUCTION = null;
-
-    private static $SANDBOX = null;
-
-    private static $DEVELOPER = null;
-
-    private static $JP = null;
-
-    /**
-     * This Environment class instance represents the Zoho CRM Production Environment in Japan Domain.
-     * @return Environment A Environment class instance.
-     */
-    public static function PRODUCTION()
+    protected static function getAccountsUrl(): string
     {
-        self::$JP = new JPDataCenter();
-
-        if (self::$PRODUCTION == null)
-        {
-            self::$PRODUCTION = DataCenter::setEnvironment("https://www.zohoapis.jp", self::$JP->getIAMUrl(), self::$JP->getFileUploadUrl(), "jp_prd");
-        }
-
-        return self::$PRODUCTION;
+        return 'https://accounts.zoho.com.jp';
     }
 
-    /**
-     * This Environment class instance represents the Zoho CRM Sandbox Environment in Japan Domain.
-     * @return Environment A Environment class instance.
-     */
-    public static function SANDBOX()
+    protected static function getFileUploadURL(): string
     {
-        self::$JP = new JPDataCenter();
-
-        if (self::$SANDBOX == null)
-        {
-            self::$SANDBOX = DataCenter::setEnvironment("https://sandbox.zohoapis.jp", self::$JP->getIAMUrl(), self::$JP->getFileUploadUrl(), "jp_sdb");
-        }
-
-        return self::$SANDBOX;
+        return 'https://content.zohoapis.com.jp';
     }
 
-    /**
-     * This Environment class instance represents the Zoho CRM Developer Environment in Japan Domain.
-     * @return Environment A Environment class instance.
-     */
-    public static function DEVELOPER()
+    protected static function getDeveloperUrl(): string
     {
-        self::$JP = new JPDataCenter();
-
-        if (self::$DEVELOPER == null)
-        {
-            self::$DEVELOPER = DataCenter::setEnvironment("https://developer.zohoapis.jp", self::$JP->getIAMUrl(), self::$JP->getFileUploadUrl(), "jp_dev");
-        }
-
-        return self::$DEVELOPER;
+        return 'https://developer.zohoapis.com.jp';
     }
 
-    public function getIAMUrl()
+    protected static function getDeveloperName(): string
     {
-        return "https://accounts.zoho.jp/oauth/v2/token";
+        return 'jp_dev';
     }
 
-    public function getFileUploadUrl()
+    protected static function getSandboxUrl(): string
     {
-        return "https://content.zohoapis.jp";
+        return 'https://sandbox.zohoapis.com.jp';
+    }
+
+    protected static function getSandboxName(): string
+    {
+        return 'jp_sdb';
+    }
+
+    protected static function getProductionUrl(): string
+    {
+        return 'https://www.zohoapis.com.jp';
+    }
+
+    protected static function getProductionName(): string
+    {
+        return 'jp_prd';
     }
 }

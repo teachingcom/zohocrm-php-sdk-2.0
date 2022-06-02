@@ -2,79 +2,47 @@
 
 namespace com\zoho\api\logger;
 
-use Exception;
-
-use com\zoho\api\logger\Logger;
-
 use com\zoho\crm\api\exception\SDKException;
+use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * This class to initialize the SDK logger.
  */
 class SDKLogger
 {
-    private static $logPrecedence = array("OFF", "FATAL", "ERROR", "WARNING", "INFO", "DEBUG", "TRACE", "ALL");
+    /** @var LoggerInterface|null */
+    private static $logger = null;
 
-    private static $filePath = null;
-
-    private static $level = null;
-
-    public static function initialize(Logger $log)
+    public static function initialize(LoggerInterface $logger)
     {
-        self::$filePath = $log->getFilePath();
-
-        self::$level =$log->getLevel();
+        self::$logger = $logger;
     }
 
-    private static function checkLevel($messageLevel, $loggerLevel)
+    /** @return LoggerInterface|null */
+    public static function getLogger()
     {
-        $message_index = array_search($messageLevel , self::$logPrecedence);
-
-        $logger_index = array_search($loggerLevel, self::$logPrecedence);
-
-        return ($message_index <= $logger_index) ? TRUE : FALSE;
+        return self::$logger;
     }
 
-    public static function writeToFile($messageLevel, $msg)
+    public static function warn(string $msg)
     {
-        if(self::$level == "OFF")
-        {
-            return;
-        }
-
-        $filePointer = fopen(self::$filePath, "a");
-
-        if (!$filePointer)
-        {
-            return;
-        }
-
-        if(self::$level == "ALL" || self::checkLevel($messageLevel, self::$level) == TRUE)
-        {
-            fwrite($filePointer, sprintf("%s %s %s %s\n", date("Y-m-d H:i:s"), "com\zoho\api\logger\SDKLogger", $messageLevel, $msg));
-
-            fclose($filePointer);
-        }
+        self::$logger->warning($msg);
     }
 
-    public static function warn($msg)
+    public static function info(string $msg)
     {
-        self::writeToFile("WARNING", $msg);
+        self::$logger->info($msg);
     }
 
-    public static function info($msg)
-    {
-        self::writeToFile("INFO",  $msg);
-    }
-
-    public static function severe(Exception $e)
+    public static function severe(Throwable $e)
     {
         $message = self::parseException($e);
 
-        self::writeToFile("SEVERE", $message);
+        self::$logger->emergency($message, ['exception' => $e]);
     }
 
-    public static function severeError($message, Exception $e=null)
+    public static function severeError($message, Throwable $e = null)
     {
         $parsedMessage = $message;
 
@@ -83,10 +51,10 @@ class SDKLogger
             $parsedMessage = $parsedMessage . " " . self::parseException($e);
         }
 
-        self::writeToFile("SEVERE", $parsedMessage);
+        self::$logger->emergency($parsedMessage, ['exception' => $e]);
     }
 
-    private static function parseException(Exception $e)
+    private static function parseException(Throwable $e): string
     {
         $message = "";
 
@@ -100,21 +68,20 @@ class SDKLogger
         return $message . $e->getTraceAsString();
     }
 
-    public static function err(Exception $e)
+    public static function err(Throwable $e)
     {
         $message = self::parseException($e);
 
-        self::writeToFile("ERROR", $message);
+        self::$logger->error($message, ['exception' => $e]);
     }
 
-    public static function error($message)
+    public static function error(string $message)
     {
-        self::writeToFile("ERROR", $message);
+        self::$logger->error($message);
     }
 
-    public static function debug($msg)
+    public static function debug(string $msg)
     {
-        self::writeToFile("DEBUG", $msg);
+        self::$logger->debug($msg);
     }
 }
-?>

@@ -1,11 +1,11 @@
 <?php
+
 namespace com\zoho\crm\api\util;
 
 use com\zoho\crm\api\exception\SDKException;
-
 use com\zoho\crm\api\Initializer;
-
-use com\zoho\crm\api\util\Constants;
+use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\Psr7\Response;
 
 /**
  * This abstract class is to construct API request and response.
@@ -16,9 +16,8 @@ abstract class Converter
 
     /**
      * Creates a Converter class instance with the CommonAPIHandler class instance.
-     * @param CommonAPIHandler $commonAPIHandler A CommonAPIHandler class instance.
      */
-    public function __construct($commonAPIHandler)
+    public function __construct(CommonAPIHandler $commonAPIHandler)
     {
        $this->commonAPIHandler = $commonAPIHandler;
     }
@@ -33,41 +32,34 @@ abstract class Converter
 
     /**
      * This abstract method is to construct the API request.
-     * @param object $responseObject A object containing the POJO class instance.
+     * @param array $requestOptions Array of request options to be appended with form data.
+     * @param mixed $responseObject A object containing the POJO class instance.
      * @param string $pack A string containing the expected method return type.
-     * @param integer $instanceNumber An integer containing the POJO class instance list number.
-     * @param array $memberDetail An array containing the member Detail
-     * @return object A object representing the API request body object.
+     * @param integer|null $instanceNumber An integer containing the POJO class instance list number.
+     * @param array|null $memberDetail An array containing the member Detail
+     * @return array Updated `$requestOptions`.
      */
-    public abstract function formRequest($responseObject, $pack, $instanceNumber, $memberDetail=null);
-
-    /**
-     * This abstract method is to construct the API request body.
-     * @param object $requestBase A curl instance.
-     * @param object $requestObject A object containing the API request body object.
-     */
-    public abstract function appendToRequest(&$requestBase, $requestObject);
+    public abstract function formRequest(array $requestOptions, $responseObject, string $pack, ?int $instanceNumber, array $memberDetail = null): array;
 
     /**
      * This abstract method is to process the API response.
-     * @param object $response A object containing the HttpResponse class instance.
-     * @param $pack $pack A string containing the expected method return type.
+     * @param Response $response A object containing the HttpResponse class instance.
+     * @param string $pack $pack A string containing the expected method return type.
      */
-    public abstract function getWrappedResponse($response, $pack);
+    public abstract function getWrappedResponse(Response $response, string $pack);
 
     /**
      * This method is to validate if the input values satisfy the constraints for the respective fields.
      * @param string $className A string containing the class name.
      * @param string $memberName A string containing the member name.
      * @param array $keyDetails A array containing the key JSON details.
-     * @param object $value A object containing the key value.
+     * @param mixed $value A object containing the key value.
      * @param array $uniqueValuesMap A array containing the construct objects.
-     * @param integer $instanceNumber An integer containing the POJO class instance list number.
-     * @throws \com\zoho\crm\api\exception\SDKException if a problem occurs.
-     * @return boolean A boolean representing the key value is expected pattern, unique, length, and values.
+     * @param int|null $instanceNumber An integer containing the POJO class instance list number.
+     * @throws SDKException if a problem occurs.
      */
-    public function valueChecker($className, $memberName, $keyDetails, $value, &$uniqueValuesMap, $instanceNumber)
-	{
+    public function valueChecker(string $className, string $memberName, array $keyDetails, $value, array &$uniqueValuesMap, ?int $instanceNumber): bool
+    {
 		$detailsJO = array();
 
 		$name = $keyDetails[Constants::NAME];
@@ -294,10 +286,9 @@ abstract class Converter
 
 	/**
 	 * This method to get the module field JSON details file path.
-	 * @return string A string representing the module field JSON details file path.
 	 */
-	public function getEncodedFileName()
-	{
+	public function getEncodedFileName(): string
+    {
 		$fileName = Initializer::getInitializer()->getUser()->getEmail();
 
 		$fileName = explode("@", $fileName)[0] . Initializer::getInitializer()->getEnvironment()->getUrl();

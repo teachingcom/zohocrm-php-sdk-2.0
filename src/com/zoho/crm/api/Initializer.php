@@ -1,85 +1,91 @@
 <?php
 /*
-Copyright (c) 2021, ZOHO CORPORATION PRIVATE LIMITED 
-All rights reserved. 
- 
-   Licensed under the Apache License, Version 2.0 (the "License"); 
-   you may not use this file except in compliance with the License. 
-   You may obtain a copy of the License at 
- 
-       http://www.apache.org/licenses/LICENSE-2.0 
- 
-   Unless required by applicable law or agreed to in writing, software 
-   distributed under the License is distributed on an "AS IS" BASIS, 
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. 
-   See the License for the specific language governing permissions and 
-   limitations under the License. 
+Copyright (c) 2021, ZOHO CORPORATION PRIVATE LIMITED
+All rights reserved.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
 */
 
 namespace com\zoho\crm\api;
 
-use com\zoho\api\logger\Levels;
-
-use com\zoho\api\logger\Logger;
-
-use com\zoho\crm\api\exception\SDKException;
-
-use com\zoho\crm\api\sdkconfigbuilder\SDKConfig;
-
-use com\zoho\crm\api\util\Constants;
-
-use com\zoho\crm\api\util\RequestProxy;
-
-use com\zoho\crm\api\dc\Environment;
-
-use com\zoho\api\authenticator\Token;
-
+use com\zoho\api\authenticator\OAuthToken;
 use com\zoho\api\authenticator\store\TokenStore;
-
-use com\zoho\crm\api\UserSignature;
-
 use com\zoho\api\logger\SDKLogger;
-
+use com\zoho\crm\api\exception\SDKException;
+use com\zoho\crm\api\util\Constants;
+use com\zoho\crm\api\dc\Environment;
+use GuzzleHttp\ClientInterface;
+use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * This class to initialize Zoho CRM SDK.
  */
 class Initializer
 {
-    public static $LOCAL = array();
+    public static $LOCAL = [];
 
+    /** @var self|null */
     private static $initializer;
 
+    /** @var Environment|null */
     private $environment = null;
 
+    /** @var TokenStore|null */
     private $store = null;
 
+    /** @var UserSignature|null */
     private $user = null;
 
+    /** @var OAuthToken|null */
     private $token = null;
 
+    /** @var array|null */
     public static $jsonDetails = null;
 
+    /** @var string|null */
     private $resourcePath = null;
 
-    private $requestProxy = null;
-
+    /** @var SDKConfig|null */
     private $sdkConfig = null;
+
+    /** @var ClientInterface|null */
+    private $client = null;
 
     /**
      * This to initialize the SDK.
      *
      * @param UserSignature $user A UserSignature class instance represents the CRM user.
      * @param Environment $environment A Environment class instance containing the CRM API base URL and Accounts URL.
-     * @param Token $token A Token class instance containing the OAuth client application information.
+     * @param OAuthToken $token An OAuthToken class instance containing the OAuth client application information.
      * @param TokenStore $store A TokenStore class instance containing the token store information.
-     * @param SDKConfig $ A SDKConfig class instance containing the SDK configuration.
-     * @param string $resourcePath A String containing the absolute directory path to store user specific JSON files containing module fields information.
-     * @param Logger $logger A Logger class instance containing the log file path and Logger type.
-     * @param RequestProxy $proxy A RequestProxy class instance containing the proxy properties of the user.
+     * @param SDKConfig $sdkConfig A SDKConfig class instance containing the SDK configuration.
+     * @param string $resourcePath A String containing the absolute directory path to store user specific JSON files
+     *     containing module fields information.
+     * @param LoggerInterface $logger A PSR-compatible Logger instance.
+     * @param ClientInterface $client A Guzzle REST Client instance.
+     * @throws SDKException
      */
-    public static function initialize($user, $environment, $token, $store, $sdkConfig, $resourcePath, $logger=null, $proxy=null)
-    {
+    public static function initialize(
+        UserSignature $user,
+        Environment $environment,
+        OAuthToken $token,
+        TokenStore $store,
+        SDKConfig $sdkConfig,
+        string $resourcePath,
+        LoggerInterface $logger,
+        ClientInterface $client
+    ) {
         try
         {
             SDKLogger::initialize($logger);
@@ -91,31 +97,21 @@ class Initializer
                     self::$jsonDetails = json_decode(file_get_contents(explode("src", realpath(__DIR__))[0] . Constants::JSON_DETAILS_FILE_PATH), true);
                 }
             }
-            catch (\Exception $ex)
+            catch (Throwable $ex)
             {
                 throw new SDKException(Constants::JSON_DETAILS_ERROR, null, null, $ex);
             }
 
             self::$initializer = new Initializer();
-
             $initializer = new Initializer();
-
             $initializer->user = $user;
-
             $initializer->environment = $environment;
-
             $initializer->token = $token;
-
             $initializer->store = $store;
-
             $initializer->sdkConfig = $sdkConfig;
-
             $initializer->resourcePath = $resourcePath;
-
-            $initializer->requestProxy = $proxy;
-
+            $initializer->client = $client;
             self::$LOCAL[$initializer->getEncodedKey($user, $environment)] = $initializer;
-
             self::$initializer = $initializer;
 
             SDKLogger::info(Constants::INITIALIZATION_SUCCESSFUL . $initializer->toString());
@@ -124,23 +120,23 @@ class Initializer
         {
             throw $e;
         }
-        catch (\Exception $e)
+        catch (Throwable $e)
         {
             throw new SDKException(Constants::INITIALIZATION_EXCEPTION, null, null, $e);
         }
     }
 
-    public static function getJSON($filePath)
+    public static function getJSON(string $filePath): ?array
     {
-        return json_decode(file_get_contents($filePath),TRUE);
+        return json_decode(file_get_contents($filePath), true);
     }
 
     /**
      * This method to get Initializer class instance.
      *
-     * @return Initializer A Initializer class instance representing the SDK configuration details.
+     * @return Initializer|null A Initializer class instance representing the SDK configuration details.
      */
-    public static function getInitializer()
+    public static function getInitializer(): ?Initializer
     {
         if (!empty(self::$LOCAL) && count(self::$LOCAL) != 0)
         {
@@ -161,32 +157,29 @@ class Initializer
      * This method to switch the different user in SDK environment.
      * @param UserSignature $user A UserSignature class instance represents the CRM user.
      * @param Environment $environment A Environment class instance containing the CRM API base URL and Accounts URL.
-     * @param Token $token A Token class instance containing the OAuth client application information.
+     * @param OAuthToken $token An OAuthToken class instance containing the OAuth client application information.
      * @param SDKConfig $sdkConfig A SDKConfig class instance containing the SDK configuration.
      */
-    public static function switchUser($user, $environment, $token, $sdkConfig, $proxy=null)
+    public static function switchUser(UserSignature $user, Environment $environment, OAuthToken $token, SDKConfig $sdkConfig, ClientInterface $client): void
     {
         $initializer = new Initializer();
-
         $initializer->user = $user;
-
         $initializer->environment = $environment;
-
         $initializer->token = $token;
-
         $initializer->store = self::$initializer->store;
-
         $initializer->sdkConfig = $sdkConfig;
-
-        $initializer->requestProxy = $proxy;
-
+        $initializer->client = $client;
         $initializer->resourcePath = self::$initializer->resourcePath;
-
         self::$LOCAL[$initializer->getEncodedKey($user, $environment)] = $initializer;
-
         self::$initializer = $initializer;
 
         SDKLogger::info(Constants::INITIALIZATION_SWITCHED . $initializer->toString());
+    }
+
+    public static function reset()
+    {
+        self::$LOCAL = [];
+        self::$initializer = null;
     }
 
     /**
@@ -194,7 +187,7 @@ class Initializer
      *
      * @return Environment A Environment representing the API environment.
      */
-    public function getEnvironment()
+    public function getEnvironment(): Environment
     {
         return $this->environment;
     }
@@ -204,7 +197,7 @@ class Initializer
      *
      * @return TokenStore A TokenStore class instance containing the token store information.
      */
-    public function getStore()
+    public function getStore(): TokenStore
     {
         return $this->store;
     }
@@ -214,67 +207,56 @@ class Initializer
      *
      * @return UserSignature A User class instance representing the CRM user.
      */
-    public function getUser()
+    public function getUser(): UserSignature
     {
         return $this->user;
     }
 
     /**
-     * This is a getter method to get RequestProxy.
-     *
-     * @return RequestProxy A RequestProxy class instance representing the proxy.
+     * This is a getter method to get the PSR-compatible REST client.
+
+     * @param ClientInterface $client
+     * @return Initializer
      */
-    public function getRequestProxy()
+    public function setClient(ClientInterface $client): self
     {
-        return $this->requestProxy;
+        $this->client = $client;
+
+        return $this;
     }
 
+    /**
+     * This is a getter method to get the PSR-compatible REST client.
+     */
+    public function getClient(): ClientInterface
+    {
+        return $this->client;
+    }
 
     /**
      * This is a getter method to get OAuth client application information.
      *
-     * @return Token A Token class instance representing the OAuth client application information.
+     * @return OAuthToken A Token class instance representing the OAuth client application information.
      */
-    public function getToken()
+    public function getToken(): OAuthToken
     {
         return $this->token;
     }
 
-    public function getResourcePath()
+    public function getResourcePath(): string
     {
         return $this->resourcePath;
     }
 
     /**
      * This is a getter method to get SDK configuration.
-     * @return SDKConfig A SDKConfig instance representing the configuration
      */
-    public function getSDKConfig()
+    public function getSDKConfig(): SDKConfig
     {
         return $this->sdkConfig;
     }
 
-    public static function removeUserConfiguration($user, $environment)
-    {
-        $initializer = new Initializer();
-
-        $key = $initializer->getEncodedKey($user, $environment);
-
-        if(array_key_exists($key, self::$LOCAL))
-        {
-            unset(self::$LOCAL[$initializer->getEncodedKey($user, $environment)]);
-        }
-        else
-        {
-            $exception = new SDKException(null, Constants::USER_NOT_FOUND_ERROR_MESSAGE);
-
-            SDKLogger::info(Constants::USER_NOT_FOUND_ERROR . $exception);
-
-            throw $exception;
-        }
-    }
-
-    private function getEncodedKey($user, $environment)
+    private function getEncodedKey(UserSignature $user, Environment $environment): string
     {
         $userMail = $user->getEmail();
 
@@ -285,9 +267,8 @@ class Initializer
         return base64_encode(implode(array_map("chr", $input)));
     }
 
-    public function toString()
-	{
+    public function toString(): string
+    {
 		return Constants::FOR_EMAIL_ID . self::$initializer->getUser()->getEmail() . Constants::IN_ENVIRONMENT . self::$initializer->getEnvironment()->getUrl() . ".";
 	}
 }
-?>

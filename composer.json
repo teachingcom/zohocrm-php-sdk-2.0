@@ -12,17 +12,39 @@
 			"role" : "Developer"
 		}
 	],
-	"require" : {
-		"php" : ">=7.0",
-		"ext-json" : "*",
-		"ext-curl" : "*"
+	"scripts": {
+		"test": "phpunit test"
 	},
-	"require-dev" : {
-		"phpunit/phpunit" : ">=5.7"
+	"require" : {
+		"php": ">=7.3",
+		"ext-curl": "*",
+		"ext-json": "*",
+		"guzzlehttp/guzzle": "^6.0|^7.0",
+		"nesbot/carbon": "^2",
+		"psr/log": "^1.1"
+	},
+	"require-dev": {
+		"doctrine/dbal": "^3.3",
+		"fakerphp/faker": "^1.19",
+		"mockery/mockery": "^1.5",
+		"monolog/monolog": "^2.6",
+		"phpunit/phpunit": "^9.5"
+	},
+	"suggest": {
+		"doctrine/dbal": "DBStore requires Doctrine DBAL",
+		"monolog/monolog": "A PSR-compatible logging library"
 	},
 	"autoload" : {
 		"psr-4" : {
-			"" : "src/"
+			"com\\" : "src/com"
 		}
+	},
+	"autoload-dev" : {
+		"psr-4" : {
+			"test\\com\\": "test/com"
+		}
+	},
+	"config": {
+		"sort-packages": true
 	}
 }

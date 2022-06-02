@@ -1,76 +1,49 @@
 <?php
-namespace com\zoho\crm\api\dc;
 
-use com\zoho\crm\api\dc\DataCenter;
+namespace com\zoho\crm\api\dc;
 
 /***
  * This class represents the properties of Zoho CRM in EU Domain.
  */
 class EUDataCenter extends DataCenter
 {
-    private static $PRODUCTION = null;
-
-    private static $SANDBOX = null;
-
-    private static $DEVELOPER = null;
-
-    private static $EU = null;
-
-    /**
-     * This Environment class instance represents the Zoho CRM Production Environment in EU Domain.
-     * @return Environment A Environment class instance.
-     */
-    public static function PRODUCTION()
+    protected static function getAccountsUrl(): string
     {
-        self::$EU = new EUDataCenter();
-
-        if (self::$PRODUCTION == null)
-        {
-            self::$PRODUCTION = DataCenter::setEnvironment("https://www.zohoapis.eu", self::$EU->getIAMUrl(), self::$EU->getFileUploadUrl(), "eu_prd");
-        }
-
-        return self::$PRODUCTION;
+        return 'https://accounts.zoho.com.eu';
     }
 
-    /**
-     * This Environment class instance represents the Zoho CRM Sandbox Environment in EU Domain.
-     * @return Environment A Environment class instance.
-     */
-    public static function SANDBOX()
+    protected static function getFileUploadURL(): string
     {
-        self::$EU = new EUDataCenter();
-
-        if (self::$SANDBOX == null)
-        {
-            self::$SANDBOX = DataCenter::setEnvironment("https://sandbox.zohoapis.eu", self::$EU->getIAMUrl(), self::$EU->getFileUploadUrl(), "eu_sdb");
-        }
-
-        return self::$SANDBOX;
+        return 'https://content.zohoapis.com.eu';
     }
 
-    /**
-     * This Environment class instance represents the Zoho CRM Developer Environment in EU Domain.
-     * @return Environment A Environment class instance.
-     */
-    public static function DEVELOPER()
+    protected static function getDeveloperUrl(): string
     {
-        self::$EU = new EUDataCenter();
-
-        if (self::$DEVELOPER == null)
-        {
-            self::$DEVELOPER = DataCenter::setEnvironment("https://developer.zohoapis.eu", self::$EU->getIAMUrl(), self::$EU->getFileUploadUrl(), "eu_dev");
-        }
-
-        return self::$DEVELOPER;
+        return 'https://developer.zohoapis.com.eu';
     }
 
-    public function getIAMUrl()
+    protected static function getDeveloperName(): string
     {
-        return "https://accounts.zoho.eu/oauth/v2/token";
+        return 'eu_dev';
     }
 
-    public function getFileUploadUrl()
+    protected static function getSandboxUrl(): string
     {
-        return "https://content.zohoapis.eu";
+        return 'https://sandbox.zohoapis.com.eu';
+    }
+
+    protected static function getSandboxName(): string
+    {
+        return 'eu_sdb';
+    }
+
+    protected static function getProductionUrl(): string
+    {
+        return 'https://www.zohoapis.com.eu';
+    }
+
+    protected static function getProductionName(): string
+    {
+        return 'eu_prd';
     }
 }

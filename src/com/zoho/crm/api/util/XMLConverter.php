@@ -1,6 +1,9 @@
 <?php
 namespace com\zoho\crm\api\util;
 
+use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\Psr7\Response;
+
 /**
  * This class processes the API response object to the POJO object and POJO object to an XML object.
  */
@@ -11,19 +14,14 @@ class XMLConverter extends Converter
         parent::__construct($commonAPIHandler);
     }
 
-    public function formRequest($requestObject, $pack, $instanceNumber, $memberDetail=null)
+    public function formRequest(array $requestOptions, $responseObject, string $pack, ?int $instanceNumber, array $memberDetail = null): array
     {
-        return null;
+        // nothing
     }
 
-    public function appendToRequest(&$requestBase, $requestObject)
+    public function getWrappedResponse(Response $response, string $pack)
     {
-        return null;
-    }
-
-    public function getWrappedResponse($responseObject, $pack)
-    {
-        return $this->getResponse($responseObject, $pack);
+        return $this->getResponse($response, $pack);
     }
 
     public function getResponse($response, $pack)

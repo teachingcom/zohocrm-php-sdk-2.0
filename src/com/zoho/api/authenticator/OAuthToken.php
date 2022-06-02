@@ -1,216 +1,227 @@
 <?php
+
 namespace com\zoho\api\authenticator;
 
-use com\zoho\crm\api\util\APIHTTPConnector;
-
-use com\zoho\crm\api\Initializer;
-
-use com\zoho\crm\api\util\Constants;
-
-use com\zoho\crm\api\exception\SDKException;
-
-use com\zoho\api\authenticator\Token;
-
-use Exception;
-
+use Carbon\CarbonImmutable;
+use com\zoho\api\authenticator\store\TokenStore;
 use com\zoho\api\logger\SDKLogger;
+use com\zoho\crm\api\exception\SDKException;
+use com\zoho\crm\api\Initializer;
+use com\zoho\crm\api\UserSignature;
+use com\zoho\crm\api\util\Constants;
+use DateTimeImmutable;
+use DateTimeInterface;
+use GuzzleHttp\Exception\BadResponseException;
+use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Psr7\Request;
+use Psr\Http\Message\ResponseInterface;
+use Throwable;
 
 /**
  * This class gets the tokens and checks the expiry time.
  */
-class OAuthToken implements Token
+class OAuthToken
 {
-    private $clientID = null;
+    private $clientID;
+    private $clientSecret;
+    private $redirectURL;
+    private $grantToken;
+    private $refreshToken;
+    private $accessToken;
+    /** @var CarbonImmutable|null */
+    private $expiryTime;
+    private $userMail;
+    private $id;
 
-    private $clientSecret = null;
-
-    private $redirectURL = null;
-
-    private $grantToken = null;
-
-    private $refreshToken = null;
-
-    private $accessToken = null;
-
-    private $expiresIn = null;
-
-    private $userMail = null;
-
-    private $id = null;
+    /**
+     * Creates an OAuthToken class instance with the specified parameters.
+     * @param string $clientID A string containing the OAuth client id.
+     * @param string $clientSecret A string containing the OAuth client secret.
+     * @param string|null $id An optional string containing the OAuth record id.
+     * @param string|null $grantToken A string containing the GRANT token.
+     * @param string|null $refreshToken A string containing the Refresh token.
+     * @param string|null $redirectURL An optional string containing the OAuth redirect URL.
+     * @param string|null $accessToken An optional string containing the OAuth access token.
+     * @param string|null $userMail An optional string containing the user email.
+     * @param DateTimeInterface|null $expiryTime An optional DateTimeInterface compatible instance indicating the time of expiration.
+     */
+    public function __construct(
+        string $clientID,
+        string $clientSecret,
+        string $id = null,
+        string $grantToken = null,
+        string $refreshToken = null,
+        string $redirectURL = null,
+        string $accessToken = null,
+        string $userMail = null,
+        DateTimeInterface $expiryTime = null
+    ) {
+        $this->clientID = $clientID;
+        $this->clientSecret = $clientSecret;
+        $this->id = $id;
+        $this->grantToken = $grantToken;
+        $this->refreshToken = $refreshToken;
+        $this->redirectURL = $redirectURL;
+        $this->accessToken = $accessToken;
+        $this->userMail = $userMail;
+        $this->expiryTime = new CarbonImmutable($expiryTime);
+    }
 
     /**
      * This is a setter method to set OAuth client id.
-     * @param string A string representing the OAuth client id.
      */
-    public function setClientId($clientID)
+    public function setClientId(string $clientID)
     {
         $this->clientID = $clientID;
     }
 
     /**
      * This is a getter method to get OAuth client id.
-     * @return string A string representing the OAuth client id.
      */
-    public function getClientId()
+    public function getClientId(): string
     {
         return $this->clientID;
     }
 
     /**
      * This is a getter method to set OAuth client secret.
-     * @param string A string representing the OAuth client secret.
      */
-    public function setClientSecret($clientSecret)
+    public function setClientSecret(string $clientSecret)
     {
         $this->clientSecret = $clientSecret;
     }
 
     /**
      * This is a getter method to get OAuth client secret.
-     * @return string A string representing the OAuth client secret.
      */
-    public function getClientSecret()
+    public function getClientSecret(): string
     {
         return $this->clientSecret;
     }
 
     /**
      * This is a getter method to get OAuth redirect URL.
-     * @return string A string representing the OAuth redirect URL.
      */
-    public function getRedirectURL()
+    public function getRedirectURL(): ?string
     {
         return $this->redirectURL;
     }
 
     /**
      * This is a getter method to set OAuth redirect URL.
-     * @param string A string representing the OAuth redirect URL.
      */
-    public function setRedirectURL($redirectURL)
+    public function setRedirectURL(string $redirectURL)
     {
         $this->redirectURL = $redirectURL;
     }
 
     /**
      * This is a setter method to set grant token.
-     * @param string A string representing the grant token.
      */
-    public function setGrantToken($grantToken)
+    public function setGrantToken(string $grantToken)
     {
         $this->grantToken = $grantToken;
     }
 
     /**
      * This is a getter method to get grant token.
-     * @return NULL|string A string representing the grant token.
      */
-    public function getGrantToken()
+    public function getGrantToken(): ?string
     {
         return $this->grantToken;
     }
 
     /**
      * This is a getter method to get refresh token.
-     * @return NULL|string|mixed A string representing the refresh token.
      */
-    public function getRefreshToken()
+    public function getRefreshToken(): ?string
     {
         return $this->refreshToken;
     }
 
     /**
      * This is a setter method to set refresh token.
-     * @param string $refreshToken A string containing the refresh token.
      */
-    public function setRefreshToken($refreshToken)
+    public function setRefreshToken(string $refreshToken)
     {
         $this->refreshToken = $refreshToken;
     }
 
     /**
      * This is a getter method to get access token.
-     * @return string A string representing the access token.
      */
-    public function getAccessToken()
+    public function getAccessToken(): ?string
     {
         return $this->accessToken;
     }
 
     /**
      * This is a setter method to set access token.
-     * @param string $accessToken A string containing the access token.
      */
-    public function setAccessToken($accessToken)
+    public function setAccessToken(string $accessToken)
     {
         $this->accessToken = $accessToken;
     }
 
     /**
      * This is a getter method to get token expire time.
-     * @return string A string representing the token expire time.
      */
-    public function getExpiresIn()
+    public function getExpiryTime(): ?CarbonImmutable
     {
-        return $this->expiresIn;
+        return $this->expiryTime;
     }
 
     /**
      * This is a setter method to set token expire time.
-     * @param string $expiresIn A string containing the token expire time.
      */
-    public function setExpiresIn($expiresIn)
+    public function setExpiryTime(DateTimeInterface $expiryTime)
     {
-        $this->expiresIn = $expiresIn;
+        $this->expiryTime = new CarbonImmutable($expiryTime);
     }
 
     /**
      * This is a getter method to get user Mail.
-     * @return NULL|string|mixed A string representing the refresh token.
      */
-    public function getUserMail()
+    public function getUserMail(): ?string
     {
         return $this->userMail;
     }
 
     /**
      * This is a setter method to set user Mail.
-     * @param string $id A string containing the user Mail.
      */
-    public function setUserMail($userMail)
+    public function setUserMail(string $userMail)
     {
         $this->userMail = $userMail;
     }
 
     /**
      * This is a getter method to get ID.
-     * @return NULL|string|mixed A string representing the refresh token.
      */
-    public function getId()
+    public function getId(): ?string
     {
         return $this->id;
     }
 
-     /**
+    /**
      * This is a setter method to set ID.
-     * @param string $id A string containing the ID.
      */
-    public function setId($id)
+    public function setId(string $id)
     {
         $this->id = $id;
     }
 
-    public function authenticate(APIHTTPConnector $urlConnection)
+    /**
+     * This method to set authentication token to Request instance.
+     * @throws SDKException
+     */
+    public function authenticate(Request $request): Request
     {
         try
         {
             $initializer = Initializer::getInitializer();
-
             $store = $initializer->getStore();
-
             $user = $initializer->getUser();
-
-            $oauthToken = null;
 
             if($this->accessToken == null)
             {
@@ -228,13 +239,11 @@ class OAuthToken implements Token
                 $oauthToken = $this;
             }
 
-            $token = null;
-
             if ($oauthToken == null)//first time
             {
-                $token = $this->refreshToken != null ? $this->refreshAccessToken($user, $store)->getAccessToken() : $this->generateAccessToken($user, $store)->getAccessToken();
+                $token = $this->refreshToken ? $this->refreshAccessToken($user, $store)->getAccessToken() : $this->generateAccessToken($user, $store)->getAccessToken();
             }
-            else if ($oauthToken->getExpiresIn() != null && $this->isAccessTokenExpired($oauthToken->getExpiresIn())) //access token will expire in next 5 seconds or less
+            else if ($oauthToken->hasAccessTokenExpired())
             {
                 SDKLogger::info(Constants::REFRESH_TOKEN_MESSAGE);
 
@@ -245,69 +254,45 @@ class OAuthToken implements Token
                 $token = $oauthToken->getAccessToken();
             }
 
-            $urlConnection->addHeader(Constants::AUTHORIZATION, Constants::OAUTH_HEADER_PREFIX . $token);
+            /** @noinspection PhpIncompatibleReturnTypeInspection */
+            return $request->withHeader(Constants::AUTHORIZATION, Constants::OAUTH_HEADER_PREFIX . $token);
         }
         catch(SDKException $ex)
         {
             throw $ex;
         }
-        catch(\Exception $ex)
+        catch(Throwable $ex)
         {
             throw new SDKException(null, null, null, $ex);
         }
     }
 
-    public function getResponseFromServer($request_params)
+    /** @throws GuzzleException */
+    public function getResponseFromServer(array $form_params): ResponseInterface
     {
-        $curl_pointer = curl_init();
+        $initializer = Initializer::getInitializer();
+        $client = $initializer->getClient();
 
-        curl_setopt($curl_pointer, CURLOPT_URL, Initializer::getInitializer()->getEnvironment()->getAccountsUrl());
-
-        curl_setopt($curl_pointer, CURLOPT_HEADER, 1);
-
-        curl_setopt($curl_pointer, CURLOPT_POSTFIELDS, $this->getUrlParamsAsString($request_params));
-
-        curl_setopt($curl_pointer, CURLOPT_RETURNTRANSFER, true);
-
-        curl_setopt($curl_pointer, CURLOPT_USERAGENT, Constants::USER_AGENT);
-
-        curl_setopt($curl_pointer, CURLOPT_POST, count($request_params));
-
-        curl_setopt($curl_pointer, CURLOPT_CUSTOMREQUEST, Constants::REQUEST_METHOD_POST);
-
-        if(!Initializer::getInitializer()->getSDKConfig()->isSSLVerificationEnabled())
-        {
-            curl_setopt($curl_pointer, CURLOPT_SSL_VERIFYPEER, false);
-        }
-
-        $result = curl_exec($curl_pointer);
-
-        curl_close($curl_pointer);
-
-        return $result;
+        return $client->post($initializer->getEnvironment()->getAccountsTokenUrl(), compact('form_params'));
     }
 
-    private function refreshAccessToken($user, $store)
+    /** @throws SDKException */
+    private function refreshAccessToken(UserSignature $user, TokenStore $store): OAuthToken
     {
-        $requestParams = array();
-
-        $requestParams[Constants::CLIENT_ID] =  $this->clientID;
-
-        $requestParams[Constants::CLIENT_SECRET] =  $this->clientSecret;
-
-        $requestParams[Constants::GRANT_TYPE] = Constants::REFRESH_TOKEN;
-
-        $requestParams[Constants::REFRESH_TOKEN] =  $this->refreshToken;
-
-        $response = $this->getResponseFromServer($requestParams);
-
         try
         {
+            $response = $this->getResponseFromServer([
+                Constants::CLIENT_ID => $this->clientID,
+                Constants::CLIENT_SECRET => $this->clientSecret,
+                Constants::GRANT_TYPE => Constants::REFRESH_TOKEN,
+                Constants::REFRESH_TOKEN => $this->refreshToken,
+            ]);
+
             $this->processResponse($response);
 
             if($this->id == null)
             {
-                $this->generateId();
+                $this->generateId($user);
             }
 
             $store->saveToken($user, $this);
@@ -316,7 +301,7 @@ class OAuthToken implements Token
         {
             throw $ex;
         }
-        catch (\Exception $ex)
+        catch (Throwable $ex)
         {
             throw new SDKException(null, Constants::SAVE_TOKEN_ERROR, null, $ex);
         }
@@ -324,39 +309,33 @@ class OAuthToken implements Token
         return $this;
     }
 
-    public function generateAccessToken($user, $store)
+    /** @throws SDKException */
+    public function generateAccessToken(UserSignature $user, TokenStore $store): OAuthToken
     {
-        $requestParams = array();
-
-        $requestParams[Constants::CLIENT_ID] =  $this->clientID;
-
-        $requestParams[Constants::CLIENT_SECRET] =  $this->clientSecret;
-
-        if($this->redirectURL != null)
-        {
-            $requestParams[Constants::REDIRECT_URI] =  $this->redirectURL;
-        }
-
-        $requestParams[Constants::GRANT_TYPE] = Constants::GRANT_TYPE_AUTH_CODE;
-
-        $requestParams[Constants::CODE] = $this->grantToken;
-
-        $response = $this->getResponseFromServer($requestParams);
+        $requestParams = array_filter([
+            Constants::CLIENT_ID => $this->clientID,
+            Constants::CLIENT_SECRET => $this->clientSecret,
+            Constants::GRANT_TYPE => Constants::GRANT_TYPE_AUTH_CODE,
+            Constants::CODE => $this->grantToken,
+            Constants::REDIRECT_URI => $this->redirectURL,
+        ]);
 
         try
         {
+            $response = $this->getResponseFromServer($requestParams);
             $this->processResponse($response);
-
-            $this->generateId();
-
+            $this->generateId($user);
             $store->saveToken($user, $this);
-
         }
         catch(SDKException $ex)
         {
             throw $ex;
         }
-        catch (\Exception $ex)
+        catch(BadResponseException $ex)
+        {
+            $this->processResponse($ex->getResponse());
+        }
+        catch (Throwable $ex)
         {
             throw new SDKException(null, Constants::SAVE_TOKEN_ERROR, null, $ex);
         }
@@ -364,13 +343,10 @@ class OAuthToken implements Token
         return $this;
     }
 
-    public function processResponse($response)
+    /** @throws SDKException */
+    public function processResponse(ResponseInterface $response): self
     {
-        $headerRows = explode("\n",$response);
-
-        $responseBody = end($headerRows);
-
-        $jsonResponse = json_decode($responseBody, true);
+        $jsonResponse = json_decode($response->getBody(), true);
 
         if (!array_key_exists(Constants::ACCESS_TOKEN, $jsonResponse))
         {
@@ -379,7 +355,7 @@ class OAuthToken implements Token
 
         $this->accessToken = $jsonResponse[Constants::ACCESS_TOKEN];
 
-        $this->expiresIn = $this->getTokenExpiresIn($jsonResponse);
+        $this->expiryTime = CarbonImmutable::now()->addSeconds($jsonResponse[Constants::EXPIRES_IN]);
 
         if (array_key_exists(Constants::REFRESH_TOKEN, $jsonResponse))
         {
@@ -389,43 +365,25 @@ class OAuthToken implements Token
         return $this;
     }
 
-    private function getTokenExpiresIn($response)
+    /**
+     * Determines whether access token will expire in next 5 seconds or less.
+     */
+    public function hasAccessTokenExpired(): bool
     {
-        $expireIn = $response[Constants::EXPIRES_IN];
-
-        if(!array_key_exists(Constants::EXPIRES_IN_SEC, $response))
+        if (!($expiryTime = $this->getExpiryTime()))
         {
-            $expireIn= $expireIn * 1000;
+            // no expiry means it couldn't possibly have expired
+            return false;
         }
 
-        return $this->getCurrentTimeInMillis() + $expireIn;
+        return 5 >= CarbonImmutable::now()->addSeconds(5)->diffInSeconds($expiryTime);
     }
 
-    public function getCurrentTimeInMillis()
-    {
-        return round(microtime(true) * 1000);
-    }
-
-    public function isAccessTokenExpired($expiry_time)
-    {
-        return ((((double)$expiry_time) - $this->getCurrentTimeInMillis()) < 5000);
-    }
-
-    public function getUrlParamsAsString($urlParams)
-    {
-        $paramsAsString = "";
-
-        foreach ($urlParams as $key => $value)
-        {
-            $paramsAsString = $paramsAsString . $key . "=" . $value . "&";
-        }
-
-        $paramsAsString = rtrim($paramsAsString, "&");
-
-        return str_replace(PHP_EOL, '', $paramsAsString);
-    }
-
-    public function remove()
+    /**
+     * The method to remove the current token from the Store.
+     * @throws SDKException
+     */
+    public function remove(): bool
     {
         try
         {
@@ -437,49 +395,20 @@ class OAuthToken implements Token
         {
             throw $ex;
         }
-        catch (\Exception $ex)
+        catch (Throwable $ex)
         {
             throw new SDKException(null, null, null, $ex);
         }
     }
 
-    /**
-     * Creates an OAuthToken class instance with the specified parameters.
-     * @param string $clientID A string containing the OAuth client id.
-     * @param string $clientSecret A string containing the OAuth client secret.
-     * @param string $grantToken A string containing the GRANT token.
-     * @param string $refreshToken A string containing the Refresh token.
-     * @param string $redirectURL A string containing the OAuth redirect URL.
-     * @param string $id A string
-     */
-    private function __construct($clientID, $clientSecret, $grantToken, $refreshToken, $redirectURL=null, $id=null, $accessToken=null)
-    {
-        $this->clientID = $clientID;
-
-        $this->clientSecret = $clientSecret;
-
-        $this->grantToken = $grantToken;
-
-        $this->refreshToken = $refreshToken;
-
-        $this->redirectURL = $redirectURL;
-
-        $this->accessToken = $accessToken;
-
-        $this->id = $id;
-    }
-
-    private function generateId()
+    private function generateId(UserSignature $user)
 	{
-		$email = Initializer::getInitializer()->getUser()->getEmail();
+		$email = $user->getEmail();
 
-		$builder = Constants::PHP.explode("@",$email)[0]."_";
-
-		$builder .= Initializer::getInitializer()->getEnvironment()->getName()."_";
-
-		$builder .= substr($this->refreshToken, strlen($this->refreshToken) - 4);
+		$builder = Constants::PHP . explode("@", $email)[0] . "_";
+		$builder .= Initializer::getInitializer()->getEnvironment()->getName() . "_";
+		$builder .= substr($this->accessToken, strlen($this->accessToken) - 4);
 
 		$this->id = $builder;
 	}
 }
-?>

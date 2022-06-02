@@ -212,7 +212,7 @@ class Constants
 
     const MYSQL_USER_NAME = "root";
 
-    const MYSQL_PORT_NUMBER = "3306";
+    const MYSQL_PORT_NUMBER = 3306;
 
     const GET_TOKEN_DB_ERROR = "Exception in getToken - DBStore : ";
 
@@ -371,20 +371,6 @@ class Constants
     const REFRESH = "refresh";
 
     const GRANT = "grant";
-
-    const FATAL = "FATAL";
-
-    const ERROR_KEY = "ERROR";
-
-    const WARNING = "WARNING";
-
-    const INFO_KEY = "INFO";
-
-    const DEBUG = "DEBUG";
-
-    const TRACE = "TRACE";
-
-    const ALL = "ALL";
 
     const TOKEN_ERROR = "TOKEN ERROR";
 
@@ -656,6 +642,8 @@ class Constants
 
     const TOKEN_ERROR_MESSAGE = "Token MUST NOT be null.";
 
+    const LOGGER_ERROR_MESSAGE = "Logger MUST NOT be null.";
+
     const STORE_ERROR_MESSAGE = "Store MUST NOT be null.";
 
     const SDK_CONFIG_ERROR_MESSAGE = "sdkConfig MUST NOT be null.";
@@ -680,6 +668,8 @@ class Constants
 
     const CLIENT_SECRET_NULL_ERROR_MESSAGE = "ClientSecret MUST NOT be null" ;
 
+    const ENVIRONMENT_NULL_ERROR_MESSAGE = "Environment MUST NOT be null" ;
+
     const OAUTH_MANDATORY_KEYS = ["grantToken", "refreshToken", "id", "accessToken"];
 
     const SKIP_MODULES = array("deals");
@@ -688,4 +678,3 @@ class Constants
 
     const OWNER_LOOKUP = "ownerlookup";
 }
-?>

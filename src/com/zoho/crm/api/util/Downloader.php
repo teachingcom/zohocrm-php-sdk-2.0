@@ -1,36 +1,26 @@
 <?php
+
 namespace com\zoho\crm\api\util;
 
 use com\zoho\crm\api\Initializer;
-
 use com\zoho\crm\api\util\Constants;
-
 use com\zoho\crm\api\util\JSONConverter;
+use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\Psr7\Response;
 
 /**
  * This class is to process the download file and stream response.
  */
 class Downloader extends Converter
 {
-
-    public function __construct($commonAPIHandler)
+    public function formRequest(array $requestOptions, $responseObject, string $pack, ?int $instanceNumber, array $memberDetail = null): array
     {
-        parent::__construct($commonAPIHandler);
+        // nothing
     }
 
-    public function formRequest($requestObject, $pack, $instanceNumber, $classMemberDetail = NULL)
+    public function getWrappedResponse(Response $response, string $pack)
     {
-        return null;
-    }
-
-    public function appendToRequest(&$requestBase, $requestObject)
-    {
-        return null;
-    }
-
-    public function getWrappedResponse($response, $pack)
-    {
-        list ($headers, $content) = explode("\r\n\r\n", strval($response), 2);
+        [$headers, $content] = explode("\r\n\r\n", strval($response), 2);
 
         $headerArray = (explode("\r\n", $headers, 50));
 

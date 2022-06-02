@@ -1,86 +1,84 @@
 <?php
+
 namespace com\zoho\crm\api\dc;
 
 /**
- * The abstract class represents the properties of Zoho CRM DataCenter.
+ * The interface defines the methods of Zoho CRM DataCenter instances.
  */
 abstract class DataCenter
 {
-    /**
-     *  This method to get accounts URL. URL to be used when calling an OAuth accounts.
-     * @return string A string representing the accounts URL.
-     */
-    public abstract function getIAMUrl();
+    private static $envs = [];
 
     /**
-     * This method to get File Upload URL.
-     * @return string A string representing the File Upload URL.
+     * This Environment class instance represents the Zoho CRM Developer Environment.
      */
-    public abstract function getFileUploadUrl();
-
-    public static function setEnvironment($url, $accountUrl, $fileUploadUrl, $name)
+    public static function DEVELOPER(): Environment
     {
-        return new Environment($url, $accountUrl, $fileUploadUrl, $name);
-    }
-}
-
-/**
- * The abstract class represents the properties of Zoho CRM Environment.
- */
-class Environment
-{
-    public $url = null;
-
-    public $accountUrl = null;
-
-    public $fileUploadUrl = null;
-
-    public $name = null;
-
-    public function __construct($url, $accountUrl, $fileUploadUrl, $name)
-    {
-        $this->url = $url;
-
-        $this->accountUrl = $accountUrl;
-
-        $this->fileUploadUrl = $fileUploadUrl;
-
-        $this->name = $name;
+        return self::getEnvironment(static::getDeveloperName(), static::getDeveloperUrl());
     }
 
     /**
-     * This method to get Zoho CRM API URL.
-     * @return string A string representing the Zoho CRM API URL.
+     * This Environment class instance represents the Zoho CRM Production Environment.
      */
-    public function getUrl()
+    public static function PRODUCTION(): Environment
     {
-        return $this->url;
+        return self::getEnvironment(static::getProductionName(), static::getProductionUrl());
     }
 
     /**
-     * This method to get Zoho CRM Accounts URL.
-     * @return string A string representing the accounts URL.
+     * This Environment class instance represents the Zoho CRM Sandbox Environment.
      */
-    public function getAccountsUrl()
+    public static function SANDBOX(): Environment
     {
-        return $this->accountUrl;
+        return self::getEnvironment(static::getSandboxName(), static::getSandboxUrl());
+    }
+
+    /** Provides the Datacenter's Zoho CRM Accounts URL. */
+    abstract protected static function getAccountsUrl(): string;
+
+    /** Provides the Datacenter's Zoho CRM File Upload URL. */
+    abstract protected static function getFileUploadUrl(): string;
+
+    /** Provides the Developer Datacenter's Zoho CRM API URL. */
+    abstract protected static function getDeveloperUrl(): string;
+
+    /** Provides the Developer Datacenter's name. */
+    abstract protected static function getDeveloperName(): string;
+
+    /** Provides the Production Datacenter's Zoho CRM API URL. */
+    abstract protected static function getProductionUrl(): string;
+
+    /** Provides the Production Datacenter's name. */
+    abstract protected static function getProductionName(): string;
+
+    /** Provides the Sandbox Datacenter's Zoho CRM API URL. */
+    abstract protected static function getSandboxUrl(): string;
+
+    /** Provides the Sandbox Datacenter's name. */
+    abstract protected static function getSandboxName(): string;
+
+    /** Provides an Environment instance matching the given name if available. */
+    public static function getByName(string $name): ?Environment
+    {
+        $map = [
+            static::getDeveloperName() => static::DEVELOPER(),
+            static::getSandboxName() => static::SANDBOX(),
+            static::getProductionName() => static::PRODUCTION(),
+        ];
+
+        return $map[$name] ?? null;
     }
 
     /**
-     * This method to get File Upload URL.
-     * @return string A string representing the File Upload URL.
+     * Provides an `Environment` instance corresponding to the given environment key.
      */
-    public function getFileUploadUrl()
+    protected static function getEnvironment(string $name, string $url): Environment
     {
-        return $this->fileUploadUrl;
-    }
+        if (!($env = self::$envs[$name] ?? null)) {
+            self::$envs[$name] = $env =
+                new Environment($url, static::getAccountsUrl(), static::getFileUploadUrl(), $name);
+        }
 
-    /**
-     * This method to get name.
-     * @return string A string representing the name.
-     */
-    public function getName()
-    {
-        return $this->name;
+        return $env;
     }
 }

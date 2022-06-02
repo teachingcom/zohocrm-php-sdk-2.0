@@ -2,389 +2,259 @@
 
 namespace com\zoho\api\authenticator\store;
 
-use com\zoho\api\authenticator\OAuthToken;
-
+use Carbon\CarbonImmutable;
 use com\zoho\api\authenticator\OAuthBuilder;
-
+use com\zoho\api\authenticator\OAuthToken;
 use com\zoho\crm\api\exception\SDKException;
-
+use com\zoho\crm\api\UserSignature;
 use com\zoho\crm\api\util\Constants;
-
-use Exception;
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Query\QueryBuilder;
+use Doctrine\DBAL\Schema\Schema;
+use Throwable;
 
 /**
- *
  * This class stores the user token details to the MySQL DataBase.
- *
  */
 class DBStore implements TokenStore
 {
-    private $userName = null;
-
-    private $portNumber = null;
-
-    private $password = null;
-
-    private $host = null;
-
-    private $databaseName = null;
-
-    private $tableName = null;
+    /** @var Connection */
+    private $connection;
+    /** @var string */
+    private $tableName;
 
     /**
-     * Create an DBStore class instance with the specified parameters.
-     * @param string $host A string containing the DataBase host name.
-     * @param string $databaseName A String containing the DataBase name.
-     * @param string $tableName A String containing the DataBase table name.
-     * @param string $userName A String containing the DataBase user name.
-     * @param string $password A String containing the DataBase password.
-     * @param string $portNumber A String containing the DataBase port number.
+     * Create an DBStore class instance with the specified connection.
      */
-    private function __construct($host, $databaseName, $tableName, $userName, $password, $portNumber)
+    public function __construct(Connection $connection, string $tableName)
     {
-        $this->host = $host;
-
-        $this->databaseName = $databaseName;
-
+        $this->connection = $connection;
         $this->tableName = $tableName;
-
-        $this->userName = $userName;
-
-        $this->password = $password;
-
-        $this->portNumber = $portNumber;
     }
 
-    public function getToken($user, $token)
+    public function getConnection(): Connection
     {
-        $connection = null;
+        return $this->connection;
+    }
 
+    /**
+     * Creates the Tokens table within the database.
+     * @throws SDKException
+     */
+    public function createSchema(): self
+    {
+        try {
+            $schema = new Schema();
+
+            $table = $schema->createTable($this->tableName);
+            $table->addColumn('id', 'string')->setLength(255)->setNotnull(true);
+            $table->setPrimaryKey(['id']);
+            $table->addColumn('user_mail', 'string')->setLength(255)->setNotnull(true);
+            $table->addColumn('client_id', 'string')->setLength(255)->setNotnull(false);
+            $table->addColumn('client_secret', 'string')->setLength(255)->setNotnull(false);
+            $table->addColumn('refresh_token', 'string')->setLength(255)->setNotnull(false);
+            $table->addColumn('access_token', 'string')->setLength(255)->setNotnull(false);
+            $table->addColumn('grant_token', 'string')->setLength(255)->setNotnull(false);
+            $table->addColumn('expiry_time', 'string')->setLength(20)->setNotnull(false);
+            $table->addColumn('redirect_url', 'string')->setLength(255)->setNotnull(false);
+
+            $queries = $schema->toSql($this->connection->getDatabasePlatform());
+            foreach ($queries as $query) {
+                $this->connection->executeStatement($query);
+            }
+
+            return $this;
+        } catch (Throwable $e) {
+            throw new SDKException('TABLE_CREATE_ERROR', 'Unable to create database table.', [], $e);
+        }
+    }
+
+    public function getToken(UserSignature $user, OAuthToken $token): ?OAuthToken
+    {
         try
         {
-            $connection = $this->getMysqlConnection();
+            $qb = $this->connection->createQueryBuilder()
+                ->select('*')
+                ->from($this->tableName);
+            $this->addWhereToken($qb, $user->getEmail(), $token);
 
-            if($token instanceof OAuthToken)
-            {
-                $query = $this->constructDBQuery($user->getEmail(), $token, false);
-
-                $result = mysqli_query($connection, $query);
-
-                if ($result)
-                {
-                    while ($row = mysqli_fetch_assoc($result))
-                    {
-                        $token->setId($row[Constants::ID]);
-
-                        $token->setAccessToken($row[Constants::ACCESS_TOKEN]);
-
-                        $token->setExpiresIn($row[Constants::EXPIRY_TIME]);
-
-                        $token->setRefreshToken($row[Constants::REFRESH_TOKEN]);
-
-                        $token->setUserMail($row[Constants::USER_MAIL]);
-
-                        return $token;
-                    }
-                }
+            if (!($row = $qb->fetchAssociative())) {
+                return null;
             }
+
+            return $this->fillTokenFromRow($token, $row);
         }
-        catch (\Exception $ex)
+        catch (Throwable $ex)
         {
             throw new SDKException(Constants::TOKEN_STORE, Constants::GET_TOKEN_DB_ERROR, null, $ex);
         }
-        finally
-        {
-            if ($connection != null)
-            {
-                $connection->close();
-            }
-        }
-
-        return null;
     }
 
-    public function saveToken($user, $token)
+    public function saveToken(UserSignature $user, OAuthToken $token): void
     {
-        $connection = null;
-
         try
         {
-            if($token instanceof OAuthToken)
-            {
-                $token->setUserMail($user->getEmail());
+            $token->setUserMail($user->getEmail());
+            $this->deleteToken($token);
 
-                $this->deleteToken($token);
-
-                $connection = $this->getMysqlConnection();
-
-                $query = "INSERT INTO " . $this->tableName . " (id,user_mail,client_id,client_secret,refresh_token,access_token,grant_token,expiry_time,redirect_url) VALUES(?,?,?,?,?,?,?,?,?)";
-
-                $stmt = mysqli_prepare($connection, $query);
-
-                $id = $token->getId();
-
-                $email = $user->getEmail();
-
-                $clientId = $token->getClientId();
-
-                $clientSecret = $token->getClientSecret();
-
-                $refreshToken = $token->getRefreshToken();
-
-                $accessToken = $token->getAccessToken();
-
-                $grantToken = $token->getGrantToken();
-
-                $expiresIn = $token->getExpiresIn();
-
-                $redirectURL = $token->getRedirectURL();
-
-                $stmt->bind_param('sssssssss', $id, $email, $clientId, $clientSecret, $refreshToken, $accessToken, $grantToken, $expiresIn, $redirectURL);
-            }
-
-            $result = $stmt->execute();
-
-            if (!$result)
-            {
-                $message = $connection != null ? $connection->error : null;
-
-                throw new \Exception(null, null, $message);
-            }
+            $this->connection->insert($this->tableName, [
+                'id' => $token->getId(),
+                'user_mail' => $user->getEmail(),
+                'client_id' => $token->getClientId(),
+                'client_secret' => $token->getClientSecret(),
+                'refresh_token' => $token->getRefreshToken(),
+                'access_token' => $token->getAccessToken(),
+                'grant_token' => $token->getGrantToken(),
+                'expiry_time' => $token->getExpiryTime(),
+                'redirect_url' => $token->getRedirectURL(),
+            ]);
         }
-        catch (\Exception $ex)
+        catch (Throwable $ex)
         {
             throw new SDKException(Constants::TOKEN_STORE, Constants::SAVE_TOKEN_DB_ERROR, null, $ex);
         }
-        finally
-        {
-            if ($connection != null)
-            {
-                $connection->close();
-            }
-        }
     }
 
-    public function deleteToken($token)
+    public function deleteToken(OAuthToken $token): void
     {
-        $connection = null;
-
         try
         {
-            $connection = $this->getMysqlConnection();
-
-            if($token instanceof OAuthToken)
-            {
-                $query = $this->constructDBQuery($token->getUserMail(), $token, true);
-
-                $result = mysqli_query($connection, $query);
-
-                if (! $result)
-                {
-                    throw new \Exception($connection->error);
-                }
-            }
+            $qb = $this->connection->createQueryBuilder()
+                ->delete($this->tableName);
+            $this->addWhereToken($qb, $token->getUserMail(), $token)
+                ->executeStatement();
         }
         catch (SDKException $ex)
         {
             throw $ex;
         }
-        catch (\Exception $ex)
+        catch (Throwable $ex)
         {
             throw new SDKException(Constants::TOKEN_STORE, Constants::DELETE_TOKEN_DB_ERROR, null, $ex);
         }
-        finally
-        {
-            if ($connection != null)
-            {
-                $connection->close();
-            }
-        }
     }
 
-    private function getMysqlConnection()
+    public function getTokens(): array
     {
-        $mysqli_con = new \mysqli($this->host . ":" . $this->portNumber, $this->userName, $this->password, $this->databaseName);
-
-        if ($mysqli_con->connect_errno)
-        {
-            throw new \Exception($mysqli_con->connect_error);
-        }
-
-        return $mysqli_con;
-    }
-
-    public function getTokens()
-    {
-        $connection = null;
-
-        $tokens = array();
-
         try
         {
-            $connection = $this->getMysqlConnection();
+            $result = $this->connection->createQueryBuilder()
+                ->select('*')
+                ->from($this->tableName)
+                ->executeQuery();
 
-            $query = "select * from " . $this->tableName . ";";
-
-            $result = mysqli_query($connection, $query);
-
-            if ($result)
+            $tokens = [];
+            while ($row = $result->fetchAssociative())
             {
-                while ($row = mysqli_fetch_assoc($result))
-                {
-                    $grantToken = ($row[Constants::GRANT_TOKEN] !== null && $row[Constants::GRANT_TOKEN] !== Constants::NULL_VALUE && strlen($row[Constants::GRANT_TOKEN]) > 0) ? $row[Constants::GRANT_TOKEN] : null;
+                $token = (new OAuthBuilder())
+                    ->clientId($row[Constants::CLIENT_ID])
+                    ->clientSecret($row[Constants::CLIENT_SECRET])
+                    ->refreshToken($row[Constants::REFRESH_TOKEN])
+                    ->redirectURL($row[Constants::REDIRECT_URL])
+                    ->build();
+                $this->fillTokenFromRow($token, $row);
+                $this->fillTokenGrantFromRow($token, $row);
 
-                    $token = (new OAuthBuilder())->clientId($row[Constants::CLIENT_ID])->clientSecret($row[Constants::CLIENT_SECRET])->refreshToken($row[Constants::REFRESH_TOKEN])->build();
-
-                    $token->setId($row[Constants::ID]);
-
-                    if($grantToken != null)
-                    {
-                        $token->setGrantToken($grantToken);
-                    }
-
-                    $token->setUserMail($row[Constants::USER_MAIL]);
-
-                    $token->setAccessToken($row[Constants::ACCESS_TOKEN]);
-
-                    $token->setExpiresIn($row[Constants::EXPIRY_TIME]);
-
-                    $token->setRedirectURL($row[Constants::REDIRECT_URL]);
-
-                    $tokens[] = $token;
-                }
+                $tokens[] = $token;
             }
+
+            return $tokens;
         }
-        catch (\Exception $ex)
+        catch (Throwable $ex)
         {
             throw new SDKException(Constants::TOKEN_STORE, Constants::GET_TOKENS_DB_ERROR, null, $ex);
         }
-        finally
-        {
-            if ($connection != null)
-            {
-                $connection->close();
-            }
-        }
+    }
 
-        return $tokens;
+    public function getTokenById(string $id, OAuthToken $token): OAuthToken
+    {
+        try
+        {
+            $result = $this->connection->createQueryBuilder()
+                ->select('*')
+                ->from($this->tableName)
+                ->where('id = :id')
+                ->setParameter('id', $id)
+                ->executeQuery();
+
+            if (!($row = $result->fetchAssociative()))
+            {
+                throw new SDKException(Constants::TOKEN_STORE, Constants::GET_TOKEN_BY_ID_DB_ERROR);
+            }
+
+            $token->setClientId($row[Constants::CLIENT_ID]);
+            $token->setClientSecret($row[Constants::CLIENT_SECRET]);
+            $token->setRefreshToken($row[Constants::REFRESH_TOKEN]);
+            $this->fillTokenFromRow($token, $row);
+
+            return $this->fillTokenGrantFromRow($token, $row);
+        }
+        catch (SDKException $ex)
+        {
+            throw $ex;
+        }
+        catch (Throwable $ex)
+        {
+            throw new SDKException(Constants::TOKEN_STORE, Constants::GET_TOKEN_DB_ERROR, null, $ex);
+        }
     }
 
     public function deleteTokens()
     {
-        $connection = null;
-
         try
         {
-            $connection = $this->getMysqlConnection();
-
-            $query = "delete from " . $this->tableName . ";";
-
-            mysqli_query($connection, $query);
-
+            $this->connection->createQueryBuilder()
+                ->delete($this->tableName)
+                ->executeStatement();
         }
-        catch (\Exception $ex)
+        catch (Throwable $ex)
         {
             throw new SDKException(Constants::TOKEN_STORE, Constants::DELETE_TOKENS_DB_ERROR, null, $ex);
         }
-        finally
-        {
-            if ($connection != null)
-            {
-                $connection->close();
-            }
-        }
     }
 
-    private function constructDBQuery($email, $token, $is_delete=true)
+    /**
+     * @param string|null $email
+     * @throws SDKException
+     */
+    private function addWhereToken(QueryBuilder $qb, $email, OAuthToken $token): QueryBuilder
     {
-        if ($email === null)
+        if (!$email)
         {
             throw new SDKException(Constants::USER_MAIL_NULL_ERROR, Constants::USER_MAIL_NULL_ERROR_MESSAGE);
-
         }
-        $query = $is_delete ? "delete from " : "select * from ";
 
-        $query .= $this->tableName . " where user_mail='" . $email . "' and client_id='" . $token->getClientId() . "' and ";
+        $qb->andWhere('user_mail = :email', 'client_id = :client_id')
+            ->setParameter('email', $email)
+            ->setParameter('client_id', $token->getClientId());
 
         if ($token->getGrantToken() != null)
         {
-            $query .= "grant_token='" . $token->getGrantToken() . "'";
-        }
-        else
-        {
-            $query .= "refresh_token='" . $token->getRefreshToken() . "'";
+            return $qb->andWhere('grant_token = :grant_token')
+                ->setParameter('grant_token', $token->getGrantToken());
         }
 
-        return $query;
+        return $qb->andWhere('refresh_token = :refresh_token')
+            ->setParameter('refresh_token', $token->getRefreshToken());
     }
 
-    public function getTokenById($id, $token)
+    private function fillTokenFromRow(OAuthToken $token, array $row): OAuthToken
     {
-        $connection = null;
+        $token->setId($row[Constants::ID]);
+        $token->setAccessToken($row[Constants::ACCESS_TOKEN]);
+        $token->setExpiryTime(new CarbonImmutable($row[Constants::EXPIRY_TIME]));
+        $token->setRefreshToken($row[Constants::REFRESH_TOKEN]);
+        $token->setUserMail($row[Constants::USER_MAIL]);
 
-        try
-        {
-            $connection = $this->getMysqlConnection();
+        return $token;
+    }
 
-            if($token instanceof OAuthToken)
-            {
-                $query = "select * from " . $this->tableName . " where id='" . $id . "'";
-
-                $result = mysqli_query($connection, $query);
-
-                if ($result)
-                {
-                    while ($row = mysqli_fetch_assoc($result))
-                    {
-                        $grantToken = ($row[Constants::GRANT_TOKEN] != null && $row[Constants::GRANT_TOKEN] !== Constants::NULL_VALUE && strlen($row[Constants::GRANT_TOKEN]) > 0)? $row[Constants::GRANT_TOKEN] : null;
-
-                        $token->setClientId($row[Constants::CLIENT_ID]);
-
-                        $token->setClientSecret($row[Constants::CLIENT_SECRET]);
-
-                        $token->setRefreshToken($row[Constants::REFRESH_TOKEN]);
-
-                        $token->setId($id);
-
-                        if($grantToken != null)
-                        {
-                            $token->setGrantToken($grantToken);
-                        }
-
-                        $token->setUserMail($row[Constants::USER_MAIL]);
-
-                        $token->setAccessToken($row[Constants::ACCESS_TOKEN]);
-
-                        $token->setExpiresIn($row[Constants::EXPIRY_TIME]);
-
-                        $token->setRedirectURL($row[Constants::REDIRECT_URL]);
-
-                        return $token;
-                    }
-                }
-                else
-                {
-                    throw new SDKException(Constants::TOKEN_STORE, Constants::GET_TOKEN_BY_ID_DB_ERROR);
-                }
-            }
-        }
-        catch (SDKException $ex)
-        {
-            throw $ex;
-        }
-        catch (\Exception $ex)
-        {
-            throw new SDKException(Constants::TOKEN_STORE, Constants::GET_TOKEN_DB_ERROR, null, $ex);
-        }
-        finally
-        {
-            if ($connection != null)
-            {
-                $connection->close();
-            }
+    private function fillTokenGrantFromRow(OAuthToken $token, array $row): OAuthToken
+    {
+        if (strlen($grantToken = $row[Constants::GRANT_TOKEN] ?? '') > 0) {
+            $token->setGrantToken($grantToken);
         }
 
-        return null;
+        return $token;
     }
 }
-?>

@@ -7,90 +7,56 @@ use com\zoho\crm\api\util\Constants;
 class DBBuilder
 {
     private $userName = Constants::MYSQL_USER_NAME;
-
     private $portNumber = Constants::MYSQL_PORT_NUMBER;
-
     private $password = "";
-
     private $host = Constants::MYSQL_HOST;
-
     private $databaseName = Constants::MYSQL_DATABASE_NAME;
-
     private $tableName = Constants::MYSQL_TABLE_NAME;
 
-    public function userName(string $userName)
+    public function userName(string $userName): DBBuilder
     {
-        if($userName != null)
-        {
-            $this->userName = $userName;
-        }
+        $this->userName = $userName;
 
         return $this;
     }
 
-    public function portNumber(string $portNumber)
+    public function portNumber(int $portNumber): DBBuilder
     {
-        if($portNumber != null)
-        {
-            $this->portNumber = $portNumber;
-        }
+        $this->portNumber = $portNumber;
 
         return $this;
     }
 
-    public function password(string $password)
+    public function password(string $password): DBBuilder
     {
-        if($password != null)
-        {
-            $this->password = $password;
-        }
+        $this->password = $password;
 
         return $this;
     }
 
-    public function host(string $host)
+    public function host(string $host): DBBuilder
     {
-        if($host != null)
-        {
-            $this->host = $host;
-        }
+        $this->host = $host;
 
         return $this;
     }
 
-    public function databaseName(string $databaseName)
+    public function databaseName(string $databaseName): DBBuilder
     {
-        if($databaseName != null)
-        {
-            $this->databaseName = $databaseName;
-        }
+        $this->databaseName = $databaseName;
 
         return $this;
     }
 
-    public function tableName(string $tableName)
+    public function tableName(string $tableName): DBBuilder
     {
-        if($tableName != null)
-        {
-            $this->tableName = $tableName;
-        }
+        $this->tableName = $tableName;
 
         return $this;
     }
 
-    public function build()
+    public function build(): DBStore
     {
-        $class = new \ReflectionClass(DBStore::class);
-
-        $constructor = $class->getConstructor();
-
-        $constructor->setAccessible(true);
-
-        $object = $class->newInstanceWithoutConstructor();
-
-        $constructor->invoke($object, $this->host, $this->databaseName, $this->tableName, $this->userName, $this->password, $this->portNumber);
-
-        return $object;
+        return new DBStore($this->host, $this->databaseName);
     }
 }
-?>

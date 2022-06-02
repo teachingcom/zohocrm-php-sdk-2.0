@@ -1,32 +1,31 @@
 <?php
+
 namespace com\zoho\crm\api;
 
-use com\zoho\crm\api\util\Constants;
-
 use com\zoho\crm\api\exception\SDKException;
+use com\zoho\crm\api\util\Constants;
 
 /**
  * This class represents the CRM user email.
  */
 class UserSignature
 {
-    private $email = null;
+    private $email;
 
     /**
      * Creates an UserSignature class instance with the specified user email.
      * @param string $email A string containing the CRM user email.
+     * @throws SDKException
      */
     public function __construct(string $email)
     {
         if (!filter_var($email, FILTER_VALIDATE_EMAIL))
         {
-            $error = array();
-
-            $error[Constants::FIELD] =  Constants::EMAIL;
-
-            $error[Constants::EXPECTED_TYPE] = Constants::EMAIL;
-
-            throw new SDKException(Constants::USER_SIGNATURE_ERROR, null, $error, null);
+            $error = [
+                Constants::FIELD => Constants::EMAIL,
+                Constants::EXPECTED_TYPE => Constants::EMAIL,
+            ];
+            throw new SDKException(Constants::USER_SIGNATURE_ERROR, null, $error);
         }
 
         $this->email = $email;
@@ -34,9 +33,8 @@ class UserSignature
 
     /**
      * This is a getter method to get user email.
-     * @return string A string representing the CRM user email.
      */
-    public function getEmail()
+    public function getEmail(): string
     {
         return $this->email;
     }

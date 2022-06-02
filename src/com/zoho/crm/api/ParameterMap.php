@@ -37,7 +37,8 @@ class ParameterMap
     /**
      * This method to add parameter name and value.
      * @param Param $param A Param class instance.
-     * @param object $value A object containing the parameter value.
+     * @param mixed $value A object containing the parameter value.
+     * @throws SDKException
      */
     public function add(Param $param, $value)
     {
@@ -79,7 +80,7 @@ class ParameterMap
                 $parsedParamValue = $value;
             }
         }
-        
+
         if($parsedParamValue === true || $parsedParamValue === false)
         {
             $parsedParamValue = json_encode($parsedParamValue, JSON_UNESCAPED_UNICODE);

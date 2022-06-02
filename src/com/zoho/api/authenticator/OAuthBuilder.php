@@ -2,98 +2,94 @@
 
 namespace com\zoho\api\authenticator;
 
-use com\zoho\crm\api\util\Utility;
-
-use com\zoho\crm\api\util\Constants;
-
+use com\zoho\crm\api\dc\Environment;
 use com\zoho\crm\api\exception\SDKException;
+use com\zoho\crm\api\util\Constants;
+use com\zoho\crm\api\util\Utility;
+use DateTimeInterface;
 
 class OAuthBuilder
 {
     private $clientID;
-
     private $clientSecret;
-
     private $redirectURL;
-
     private $refreshToken;
-
     private $grantToken;
-
     private $accessToken;
-
     private $id;
+    private $userMail;
+    private $expiryTime;
 
-    public function id($id)
+    public function id(?string $id): OAuthBuilder
     {
         $this->id = $id;
 
         return $this;
     }
 
-    public function clientId(string $clientID)
+    public function clientId(string $clientID): OAuthBuilder
     {
-        Utility::assertNotNull($clientID, Constants::TOKEN_ERROR, Constants::CLIENT_ID_NULL_ERROR_MESSAGE);
-
         $this->clientID = $clientID;
 
         return $this;
     }
 
-    public function clientSecret(string $clientSecret)
+    public function clientSecret(string $clientSecret): OAuthBuilder
     {
-        Utility::assertNotNull($clientSecret, Constants::TOKEN_ERROR, Constants::CLIENT_SECRET_NULL_ERROR_MESSAGE);
-
         $this->clientSecret = $clientSecret;
 
         return $this;
     }
 
-    public function redirectURL(string $redirectURL)
+    public function redirectURL(?string $redirectURL): OAuthBuilder
     {
         $this->redirectURL = $redirectURL;
 
         return $this;
     }
 
-    public function refreshToken(string $refreshToken)
+    public function refreshToken(?string $refreshToken): OAuthBuilder
     {
         $this->refreshToken = $refreshToken;
 
         return $this;
     }
 
-    public function grantToken(string $grantToken)
+    public function grantToken(?string $grantToken): OAuthBuilder
     {
         $this->grantToken = $grantToken;
 
         return $this;
     }
 
-    public function accessToken(string $accessToken)
+    public function accessToken(?string $accessToken): OAuthBuilder
     {
         $this->accessToken = $accessToken;
 
         return $this;
     }
 
-    public function build()
+    public function userMail(?string $userMail): OAuthBuilder
     {
-        if($this->grantToken == null && $this->refreshToken == null && $this->id == null && $this->accessToken == null)
-        {
-            throw new SDKException(Constants::MANDATORY_VALUE_ERROR, Constants::MANDATORY_KEY_ERROR, Constants::OAUTH_MANDATORY_KEYS);
-        }
+        $this->userMail = $userMail;
 
-        $class = new \ReflectionClass(OAuthToken::class);
+        return $this;
+    }
 
-        $constructor = $class->getConstructor();
+    public function expiryTime(?DateTimeInterface $expiryTime): OAuthBuilder
+    {
+        $this->expiryTime = $expiryTime;
 
-        $constructor->setAccessible(true);
+        return $this;
+    }
 
-        $object = $class->newInstanceWithoutConstructor();
+    /** @throws SDKException */
+    public function build(): OAuthToken
+    {
+        Utility::assertNotNull($this->clientID, Constants::TOKEN_ERROR, Constants::CLIENT_ID_NULL_ERROR_MESSAGE);
+        Utility::assertNotNull($this->clientSecret, Constants::TOKEN_ERROR, Constants::CLIENT_SECRET_NULL_ERROR_MESSAGE);
 
-        $constructor->invoke($object, $this->clientID, $this->clientSecret, $this->grantToken, $this->refreshToken, $this->redirectURL, $this->id, $this->accessToken);
-
-        return $object;
+        return new OAuthToken($this->clientID, $this->clientSecret, $this->id, $this->grantToken,
+            $this->refreshToken, $this->redirectURL, $this->accessToken, $this->userMail, $this->expiryTime);
     }
 }

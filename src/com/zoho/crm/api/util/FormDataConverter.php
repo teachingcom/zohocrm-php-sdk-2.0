@@ -1,54 +1,54 @@
 <?php
+
 namespace com\zoho\crm\api\util;
 
 use com\zoho\crm\api\exception\SDKException;
-
 use com\zoho\crm\api\Initializer;
-
-use com\zoho\crm\api\util\Constants;
-
-use com\zoho\api\logger\SDKLogger;
+use GuzzleHttp\Psr7\Request;
+use GuzzleHttp\Psr7\Response;
+use ReflectionClass;
+use ReflectionException;
+use Throwable;
 
 /**
  * This class is to process the upload file and stream.
  */
 class FormDataConverter extends Converter
 {
-    private $_uniqueValuesMap = array();
+    private $_uniqueValuesMap = [];
 
-    public function __construct($commonAPIHandler)
-    {
-        parent::__construct($commonAPIHandler);
-    }
-
-    public function formRequest($requestInstance, $pack, $instanceNumber, $classMemberDetail = null)
+    /**
+     * @throws SDKException
+     * @throws ReflectionException
+     */
+    public function formRequest(array $requestOptions, $responseObject, string $pack, ?int $instanceNumber, array $memberDetail = null): array
     {
         $classDetail = Initializer::$jsonDetails[$pack];
 
-        $reflector = new \ReflectionClass($requestInstance);
+        $reflector = new ReflectionClass($responseObject);
 
-        $request = array();
+        $params = [];
 
         foreach ($classDetail as $memberName => $memberDetail)
         {
             $modification = null;
 
-            if ((array_key_exists(Constants::READ_ONLY, $memberDetail) && ($memberDetail[Constants::READ_ONLY])) || ! array_key_exists(Constants::NAME, $memberDetail))
+            if (($memberDetail[Constants::READ_ONLY] ?? false) || ! array_key_exists(Constants::NAME, $memberDetail))
             {
                 continue;
             }
 
             try
             {
-                $modification = $reflector->getMethod(Constants::IS_KEY_MODIFIED)->invoke($requestInstance, $memberDetail[Constants::NAME]);
+                $modification = $reflector->getMethod(Constants::IS_KEY_MODIFIED)->invoke($responseObject, $memberDetail[Constants::NAME]);
             }
-            catch (\Exception $ex)
+            catch (Throwable $ex)
             {
                 throw new SDKException(Constants::EXCEPTION_IS_KEY_MODIFIED, null, null, $ex);
             }
 
             // check required
-            if ($modification == null && $modification == 0 && array_key_exists(Constants::REQUIRED, $memberDetail) && (bool) $memberDetail[Constants::REQUIRED])
+            if (!$modification && $memberDetail[Constants::REQUIRED] ?? false)
             {
                 throw new SDKException(Constants::MANDATORY_VALUE_ERROR, Constants::MANDATORY_KEY_ERROR . $memberName);
             }
@@ -57,136 +57,45 @@ class FormDataConverter extends Converter
 
             $field->setAccessible(true);
 
-            $fieldValue = $field->getValue($requestInstance);
+            $fieldValue = $field->getValue($responseObject);
 
-            if ($modification != null && $modification != 0 && $fieldValue != null && $this->valueChecker(get_class($requestInstance), $memberName, $memberDetail, $fieldValue, $this->_uniqueValuesMap, $instanceNumber))
+            if ($modification && $fieldValue != null && $this->valueChecker(get_class($responseObject), $memberName, $memberDetail, $fieldValue, $this->_uniqueValuesMap, $instanceNumber))
             {
-                $keyName = $memberDetail[Constants::NAME];
-
+                $name = $memberDetail[Constants::NAME];
                 $type = $memberDetail[Constants::TYPE];
-
+                $filename = null;
                 if ($type == Constants::LIST_NAMESPACE)
                 {
-                    $request[$keyName] = $this->setJSONArray($fieldValue, $memberDetail);
+                    $contents = $this->setJSONArray($fieldValue, $memberDetail);
                 }
                 else if ($type == Constants::MAP_NAMESPACE)
                 {
-                    $request[$keyName] = $this->setJSONObject($fieldValue, $memberDetail);
+                    $contents = $this->setJSONObject($fieldValue, $memberDetail);
                 }
                 else if (array_key_exists(Constants::STRUCTURE_NAME, $memberDetail))
                 {
-                    $request[$keyName] = $this->formRequest($fieldValue, $memberDetail[Constants::STRUCTURE_NAME], 1, $memberDetail);
+                    $contents = $this->formRequest($fieldValue, $memberDetail[Constants::STRUCTURE_NAME], 1, $memberDetail);
+                }
+                else if ($fieldValue instanceof StreamWrapper)
+                {
+                    $contents = $fieldValue->getStream();
+                    $filename = $fieldValue->getName();
                 }
                 else
                 {
-                    $request[$keyName] = $fieldValue;
+                    $contents = $fieldValue;
                 }
+
+                $requestOptions['multipart'][] = array_filter(compact('name', 'contents', 'filename'));
             }
         }
 
-        return $request;
-    }
-
-    public function appendToRequest(&$requestBase, $requestObject)
-    {
-        if(is_array($requestObject))
-        {
-            $data = array();
-
-            foreach ($requestObject as $key => $value)
-            {
-                if(is_array($value))
-                {
-                    $keysDetail = $value;
-
-                    $lineEnd = "\r\n";
-
-                    $hypen = "--";
-
-                    $date = new \DateTime();
-
-                    $data = utf8_encode($lineEnd);
-
-                    $current_time_long = $date->getTimestamp();
-
-                    $boundaryStart = utf8_encode($hypen . (string)$current_time_long . $lineEnd);
-
-                    for ($i = 0; $i < sizeof($keysDetail); $i++)
-                    {
-                        $fileObject = $keysDetail[$i];
-
-                        if($fileObject instanceof StreamWrapper)
-                        {
-                            $fileName = $fileObject->getName();
-
-                            $fileData = $fileObject->getStream();
-
-                            $data = $data . $boundaryStart;
-
-                            $contentDisp = "Content-Disposition: form-data; name=\"" . $key . "\";filename=\"" . $fileName . "\"" . $lineEnd . $lineEnd;
-
-                            $data = $data . utf8_encode($contentDisp);
-
-                            $data = $data . $fileData.utf8_encode($lineEnd);
-                        }
-                    }
-                    $boundaryend = $hypen . (string)$current_time_long . $hypen . $lineEnd . $lineEnd;
-
-                    $data = $data . utf8_encode($boundaryend);
-
-                    $header = ['ENCTYPE: multipart/form-data', 'Content-Type:multipart/form-data;boundary=' . (string)$current_time_long];
-
-                    $requestBase[CURLOPT_HTTPHEADER] = $header;
-                }
-                else if($value instanceof StreamWrapper)
-                {
-                    $fileName = $value->getName();
-
-                    $fileData = $value->getStream();
-
-                    $date = new \DateTime();
-
-                    $current_time_long = $date->getTimestamp();
-
-                    $lineEnd = "\r\n";
-
-                    $hypen = "--";
-
-                    $contentDisp = "Content-Disposition: form-data; name=\"" . $key . "\";filename=\"" . $fileName . "\"" . $lineEnd . $lineEnd;
-
-                    $header = ['ENCTYPE: multipart/form-data', 'Content-Type:multipart/form-data;boundary=' . (string)$current_time_long];
-
-                    $data = utf8_encode($lineEnd);
-
-                    $boundaryStart = utf8_encode($hypen . (string)$current_time_long . $lineEnd) ;
-
-                    $data = $data . $boundaryStart;
-
-                    $data = $data.utf8_encode($contentDisp);
-
-                    $data = $data . $fileData.utf8_encode($lineEnd);
-
-                    $boundaryend = $hypen . (string)$current_time_long. $hypen. $lineEnd. $lineEnd;
-
-                    $data = $data.utf8_encode($boundaryend);
-
-                    $requestBase[CURLOPT_HTTPHEADER] = $header;
-
-                    $requestBase[CURLOPT_POSTFIELDS]= $data;
-                }
-                else
-                {
-                    $data[$key] = $value;
-                }
-            }
-
-            $requestBase[CURLOPT_POSTFIELDS]= $data;
-        }
+        return $requestOptions;
     }
 
     public function setJSONObject($fieldValue, $memberDetail)
     {
-        $jsonObject = array();
+        $jsonObject = [];
 
         if ($memberDetail == null)
         {
@@ -211,7 +120,7 @@ class FormDataConverter extends Converter
                 {
                     if (array_key_exists(Constants::STRUCTURE_NAME, $keyDetail))
                     {
-                        $keyValue = $this->formRequest($fieldValue[$keyName], $keyDetail[Constants::STRUCTURE_NAME], 1, $memberDetail);
+                        $keyValue = $this->formRequest($request, $fieldValue[$keyName], $keyDetail[Constants::STRUCTURE_NAME], 1, $memberDetail);
                     }
                     else
                     {
@@ -240,7 +149,7 @@ class FormDataConverter extends Converter
 
     public function setJSONArray($requestObjects, $memberDetail)
     {
-        $jsonArray = array();
+        $jsonArray = [];
 
         if ($memberDetail == null)
         {
@@ -259,7 +168,7 @@ class FormDataConverter extends Converter
 
                 foreach ($requestObjects as $request)
                 {
-                    $jsonArray[] = $this->formRequest($request, $pack, ++ $instanceCount, $memberDetail);
+                    $jsonArray[] = $this->formRequest($request, $request, $pack, ++$instanceCount, $memberDetail);
                 }
             }
             else
@@ -305,12 +214,12 @@ class FormDataConverter extends Converter
         }
     }
 
-    public function getWrappedResponse($responseObject, $pack)
+    public function getWrappedResponse(Response $response, string $pack)
     {
-        return $this->getResponse($responseObject, $pack);
+        return $this->getResponse($response, $pack);
     }
 
-    public function getResponse($responseJson, $pack)
+    public function getResponse($response, $pack)
     {
         return null;
     }

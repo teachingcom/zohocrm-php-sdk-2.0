@@ -2,101 +2,66 @@
 
 namespace com\zoho\crm\api\exception;
 
+use Exception;
+use Throwable;
+
 /**
  * This class is the common SDKException object. This stands as a POJO for the SDKException thrown.
  */
-class SDKException extends \Exception
+class SDKException extends Exception
 {
-    
-    private $_message;
-
-    private $_code = 0;
-
-    // exception
-    private $_cause;
-
+    private $_code;
     private $_details;
-   
+
     /**
      * Creates an SDKException class instance with the specified parameters.
-     * @param string $errorCode A string containing the Exception error code.
-     * @param string $message A string containing the Exception error message.
-     * @param \Exception $cause An Exception class instance.
-     * @param array $details A JSON Object containing the error response.
+     * @param string|null $code A string containing the Exception error code.
+     * @param string|null $message A string containing the Exception error message.
+     * @param array|null $details A JSON Object containing the error response.
+     * @param Throwable|null $cause A Throwable class instance.
      */
-    public function __construct($code, $message, $details=null, \Exception $cause=null)
+    public function __construct(string $code = null, string $message = null, array $details = null, Throwable $cause = null)
     {
         $this->_code = $code;
-        
-        $this->_message = $message;
-        
-        $this->_cause = $cause;
-        
         $this->_details = $details;
-        
-        if (!$message && $cause != null)
-        {
-            $this->_message = $cause->getMessage();
+
+        if (!$message && $cause) {
+            $message = $cause->getMessage();
         }
-        
-        parent::__construct($message);
+        parent::__construct($message, 0, $cause);
     }
-    
+
     /**
      * This is a getter method to get Exception error code.
-     * @return string A string representing the Exception error code.
      */
-    public function getErrorCode()
+    public function getErrorCode(): string
     {
         return $this->_code;
     }
-    
-    /**
-     * This is a getter method to get Exception error message.
-     * @return String A string representing the Exception error message.
-     */
-    
-    public function getErrorMessage()
-    {
-        return $this->_message;
-    }
 
     /**
-     * This is a getter method to get Exception class instance.
-     * @return \Exception A Exception class instance.
-     */
-    public function getCause()
-    {
-        return $this->_cause;
-    }
-    
-    /**
      * This is a getter method to get error response JSONObject.
-     * @return array A JSON Object representing the error response.
+     * @return array|null A JSON Object representing the error response.
      */
     public function getDetails()
     {
         return $this->_details;
     }
-    
+
     public function __toString()
     {
         $returnMsg = get_class($this) . " Caused by : ";
-        
-        if($this->_details != null)
+
+        if($this->message == null && $this->_details != null)
         {
-            $this->_message = $this->_message != null? $this->_message.json_encode($this->_details, true) : json_encode($this->_details, true);
+            $this->message = json_encode($this->_details, true);
         }
 
         if ($this->_code != null)
         {
-            $returnMsg .= $this->_code . " - " . $this->_message;
-        }
-        else
-        {
-            $returnMsg .= $this->_message;
+            return "{$returnMsg}{$this->_code} - {$this->message}";
         }
 
-        return $returnMsg;
+        return $returnMsg . $this->message;
     }
 }

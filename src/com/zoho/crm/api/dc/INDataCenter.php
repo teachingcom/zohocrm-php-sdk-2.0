@@ -1,76 +1,49 @@
 <?php
-namespace com\zoho\crm\api\dc;
 
-use com\zoho\crm\api\dc\DataCenter;
+namespace com\zoho\crm\api\dc;
 
 /**
  * This class represents the properties of Zoho CRM in IN Domain.
  */
 class INDataCenter extends DataCenter
 {
-    private static $PRODUCTION = null;
-
-    private static $SANDBOX = null;
-
-    private static $DEVELOPER = null;
-
-    private static $IN = null;
-
-    /**
-     * This Environment class instance represents the Zoho CRM Production Environment in IN Domain.
-     * @return Environment A Environment class instance.
-     */
-    public static function PRODUCTION()
+    protected static function getAccountsUrl(): string
     {
-        self::$IN = new INDataCenter();
-
-        if (self::$PRODUCTION == null)
-        {
-            self::$PRODUCTION = DataCenter::setEnvironment("https://www.zohoapis.in", self::$IN ->getIAMUrl(), self::$IN->getFileUploadUrl(), "in_prd");
-        }
-
-        return self::$PRODUCTION;
+        return 'https://accounts.zoho.com.in';
     }
 
-    /**
-     * This Environment class instance represents the Zoho CRM Sandbox Environment in IN Domain.
-     * @return Environment A Environment class instance.
-     */
-    public static function SANDBOX()
+    protected static function getFileUploadURL(): string
     {
-        self::$IN = new INDataCenter();
-
-        if (self::$SANDBOX == null)
-        {
-            self::$SANDBOX = DataCenter::setEnvironment("https://sandbox.zohoapis.in", self::$IN ->getIAMUrl(), self::$IN->getFileUploadUrl(), "in_sdb");
-        }
-
-        return self::$SANDBOX;
+        return 'https://content.zohoapis.com.in';
     }
 
-    /**
-     * This Environment class instance represents the Zoho CRM Developer Environment in IN Domain.
-     * @return Environment A Environment class instance.
-     */
-    public static function DEVELOPER()
+    protected static function getDeveloperUrl(): string
     {
-        self::$IN = new INDataCenter();
-
-        if (self::$DEVELOPER == null)
-        {
-            self::$DEVELOPER = DataCenter::setEnvironment("https://developer.zohoapis.in", self::$IN ->getIAMUrl(), self::$IN->getFileUploadUrl(), "in_dev");
-        }
-
-        return self::$DEVELOPER;
+        return 'https://developer.zohoapis.com.in';
     }
 
-    public function getIAMUrl()
+    protected static function getDeveloperName(): string
     {
-        return "https://accounts.zoho.in/oauth/v2/token";
+        return 'in_dev';
     }
 
-    public function getFileUploadUrl()
+    protected static function getSandboxUrl(): string
     {
-        return "https://content.zohoapis.in";
+        return 'https://sandbox.zohoapis.com.in';
+    }
+
+    protected static function getSandboxName(): string
+    {
+        return 'in_sdb';
+    }
+
+    protected static function getProductionUrl(): string
+    {
+        return 'https://www.zohoapis.com.in';
+    }
+
+    protected static function getProductionName(): string
+    {
+        return 'in_prd';
     }
 }
